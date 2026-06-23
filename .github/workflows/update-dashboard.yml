@@ -2,8 +2,8 @@ name: 영업팀 대시보드 자동 업데이트
 
 on:
   schedule:
-    - cron: '0 13 * * 1-5'  # 한국시간 밤 10시 (UTC+9, 월~금)
-  workflow_dispatch:  # 수동 실행도 가능
+    - cron: '0 13 * * 1-5'
+  workflow_dispatch:
 
 jobs:
   update:
@@ -28,5 +28,5 @@ jobs:
       - name: GitHub Pages 배포
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: '🔄 대시보드 자동 업데이트'
+          commit_message: 대시보드 자동 업데이트
           file_pattern: '*.html'
