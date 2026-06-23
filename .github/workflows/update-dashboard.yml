@@ -1,4 +1,4 @@
-name: 영업팀 대시보드 자동 업데이트
+name: update
 
 on:
   schedule:
@@ -9,24 +9,15 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - name: 저장소 체크아웃
-        uses: actions/checkout@v4
-
-      - name: Python 설치
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-
-      - name: 패키지 설치
-        run: pip install requests
-
-      - name: 대시보드 생성
-        env:
+      - run: pip install requests
+      - env:
           MONDAY_TOKEN: ${{ secrets.MONDAY_TOKEN }}
         run: python generate.py
-
-      - name: GitHub Pages 배포
-        uses: stefanzweifel/git-auto-commit-action@v5
+      - uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: 대시보드 자동 업데이트
+          commit_message: update
           file_pattern: '*.html'
