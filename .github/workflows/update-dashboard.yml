@@ -1,5 +1,4 @@
 name: update
-
 on:
   schedule:
     - cron: '30 8 * * 1-5'
@@ -30,7 +29,11 @@ on:
     - cron: '45 14 * * 1-5'
     - cron: '0 15 * * 1-5'
   workflow_dispatch:
-
+    inputs:
+      force_archive:
+        description: '월말 아카이브 강제 생성 (1 입력)'
+        required: false
+        default: ''
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -42,8 +45,9 @@ jobs:
       - run: pip install requests
       - env:
           MONDAY_TOKEN: ${{ secrets.MONDAY_TOKEN }}
+          FORCE_ARCHIVE: ${{ github.event.inputs.force_archive }}
         run: python generate.py
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: update
-          file_pattern: '*.html'
+          file_pattern: '*.html archive/**/*.html'
