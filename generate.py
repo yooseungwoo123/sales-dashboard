@@ -141,7 +141,7 @@ def esc(s):
     return s.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;').replace("'","&#39;")
 
 def img_tag(url):
-    return f'<img src="{esc(url)}" style="width:100%;border-radius:8px;border:0.5px solid #e6e9ef;display:block;cursor:pointer;margin-bottom:4px" onclick="openLb(this.src)" loading="lazy" onerror="this.style.display=\'none\'">'
+    return f'<img src="{esc(url)}" style="width:100%;border-radius:8px;border:0.5px solid #e6e9ef;display:block;cursor:pointer;margin-bottom:4px;object-fit:cover" onclick="openLb(this.src)" loading="lazy" onerror="this.style.display=\'none\'">'
 
 def audio_player(url, aid):
     name = url.split("/")[-1].split("?")[0]
@@ -240,7 +240,7 @@ def render_card(p, today):
         sched_row = ''
         if sp_imgs or detail_val:
             sched_row = (f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">'
-                        + (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden"><div style="background:#e8f0fe;padding:5px 8px;border-bottom:0.5px solid #e6e9ef;font-size:9px;font-weight:700;color:#1565c0">&#128247; 일정사진</div><div style="padding:6px 8px">{sp_imgs}</div></div>' if sp_imgs else '<div></div>')
+                        + (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden"><div style="background:#e8f0fe;padding:5px 8px;border-bottom:0.5px solid #e6e9ef;font-size:9px;font-weight:700;color:#1565c0">&#128247; 일정사진</div><div style="padding:6px 8px;max-height:130px;overflow:hidden">{sp_imgs}</div></div>' if sp_imgs else '<div></div>')
                         + (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden"><div style="background:#e8f0fe;padding:5px 8px;border-bottom:0.5px solid #e6e9ef;font-size:9px;font-weight:700;color:#1565c0">&#128203; 상세내용</div><div style="padding:6px 8px;font-size:11px;color:#323338;line-height:1.6;white-space:pre-wrap;word-break:break-word">{esc(detail_val)}</div></div>' if detail_val else '<div></div>')
                         + f'</div>')
 
