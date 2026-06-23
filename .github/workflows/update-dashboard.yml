@@ -47,7 +47,10 @@ jobs:
           MONDAY_TOKEN: ${{ secrets.MONDAY_TOKEN }}
           FORCE_ARCHIVE: ${{ github.event.inputs.force_archive }}
         run: python generate.py
-      - uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: update
-          file_pattern: '*.html archive/**'
+       - name: commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "update"
+          git push
