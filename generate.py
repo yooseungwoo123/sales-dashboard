@@ -236,18 +236,24 @@ def render_card(p, today):
         sp_imgs = ''.join(img_tag(u) for u in fb.get('sched_photos',[])) if has_sched else ''
         detail_val = fb.get('detail','')
 
-        # 왼쪽: 자가피드백 → 일정사진 → 상세내용 (위에서 아래)
-        left = (f'<div style="display:flex;flex-direction:column;gap:8px">'
+        # 왼쪽 1/3: 자가피드백 → (일정사진 1:1 일정상세내용)
+        sched_row = ''
+        if sp_imgs or detail_val:
+            sched_row = (f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">'
+                        + (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden"><div style="background:#e8f0fe;padding:5px 8px;border-bottom:0.5px solid #e6e9ef;font-size:9px;font-weight:700;color:#1565c0">&#128247; 일정사진</div><div style="padding:6px 8px">{sp_imgs}</div></div>' if sp_imgs else '<div></div>')
+                        + (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden"><div style="background:#e8f0fe;padding:5px 8px;border-bottom:0.5px solid #e6e9ef;font-size:9px;font-weight:700;color:#1565c0">&#128203; 상세내용</div><div style="padding:6px 8px;font-size:11px;color:#323338;line-height:1.6;white-space:pre-wrap;word-break:break-word">{esc(detail_val)}</div></div>' if detail_val else '<div></div>')
+                        + f'</div>')
+
+        left = (f'<div style="display:flex;flex-direction:column;gap:0">'
                 + f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden">'
                 + f'<div style="background:#fafbfc;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#323338">&#127970; {esc(biz)}</div>'
                 + f'<div style="padding:8px 10px;font-size:13px;color:#323338;line-height:1.8;white-space:pre-wrap;word-break:break-word">{esc(fb["text"])}</div>'
                 + (f'<div style="padding:6px 10px;border-top:0.5px solid #e6e9ef;background:#fafbfc">{aud_h}</div>' if aud_h else '')
                 + f'</div>'
-                + (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden"><div style="background:#e8f0fe;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#1565c0">&#128247; {esc(biz)} 일정사진</div><div style="padding:8px 10px">{sp_imgs}</div></div>' if sp_imgs else '')
-                + (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden"><div style="background:#e8f0fe;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#1565c0">&#128203; {esc(biz)} 상세내용</div><div style="padding:8px 10px;font-size:13px;color:#323338;line-height:1.75;white-space:pre-wrap;word-break:break-word">{esc(detail_val)}</div></div>' if detail_val else '')
+                + sched_row
                 + f'</div>')
 
-        # 오른쪽: 상담일지 (상단 동일선상)
+        # 오른쪽 2/3: 상담일지
         right = (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden">'
                  f'<div style="background:#fafbfc;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#323338">&#128203; {esc(biz)} 상담일지</div>'
                  f'<div style="padding:8px 10px">{c_imgs if c_imgs else "<span style=font-size:10px;color:#ccc>없음</span>"}</div>'
