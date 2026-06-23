@@ -250,7 +250,7 @@ def make_html(team_key, persons, today):
             f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
             f'<title>{team["name"]} 일간 보고</title>'
             f'<style>*{{box-sizing:border-box;margin:0;padding:0}}body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;background:#f5f6f8;color:#323338;font-size:13px}}</style>'
-            f'</head><body><div style="padding:12px 14px">'
+            f'</head><body><div style="padding:12px 14px;max-width:1200px;margin:0 auto">'
             f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">'
             f'<div style="font-size:14px;font-weight:700;color:#323338;display:flex;align-items:center;gap:6px">'
             f'<div style="width:8px;height:8px;border-radius:50%;background:{team["color"]}"></div>'
