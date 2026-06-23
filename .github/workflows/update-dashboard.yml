@@ -47,7 +47,7 @@ jobs:
           MONDAY_TOKEN: ${{ secrets.MONDAY_TOKEN }}
           FORCE_ARCHIVE: ${{ github.event.inputs.force_archive }}
         run: python generate.py
-       - name: commit
+      - name: commit
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
