@@ -142,9 +142,15 @@ def render_card(p, today):
         m=re.search(pat,t or ''); return m.group(1) if m else '0'
     retire = d.get('retire','') if d else ''
     confirm = d.get('confirm','') == '컨펌 완료' if d else False
-    new_b = f'<span style="background:#e8f0fe;color:#1565c0;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600">신규 {num(retire,r"신규\s*[:：]\s*(\d+)")}건</span>' if num(retire,r'신규\s*[:：]\s*(\d+)')!='0' else ''
-    con_b = f'<span style="background:#dcfce7;color:#15803d;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600">계약 {num(retire,r"계약\s*[:：]\s*([\d.]+)")}건</span>' if num(retire,r'계약\s*[:：]\s*([\d.]+)')!='0' else ''
-    fee_b = f'<span style="background:#fef9c3;color:#854d0e;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600">수임 {num(retire,r"수임료\s*[:：]\s*([\d.]+)")}</span>' if num(retire,r'수임료\s*[:：]\s*([\d.]+)')!='0' else ''
+    PAT_N = r'신규\s*[:：]\s*(\d+)'
+    PAT_C = r'계약\s*[:：]\s*([\d.]+)'
+    PAT_F = r'수임료\s*[:：]\s*([\d.]+)'
+    nn = num(retire, PAT_N)
+    nc = num(retire, PAT_C)
+    nf = num(retire, PAT_F)
+    new_b = f'<span style="background:#e8f0fe;color:#1565c0;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600">신규 {nn}건</span>' if nn!='0' else ''
+    con_b = f'<span style="background:#dcfce7;color:#15803d;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600">계약 {nc}건</span>' if nc!='0' else ''
+    fee_b = f'<span style="background:#fef9c3;color:#854d0e;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600">수임 {nf}</span>' if nf!='0' else ''
     confirm_badge = '<span style="background:#d1fae5;color:#065f46;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600">&#10003; 컨펌</span>' if confirm else '<span style="background:#f1f5f9;color:#888;font-size:10px;padding:2px 8px;border-radius:10px;border:0.5px solid #ddd">미컨펌</span>'
 
     if not d:
