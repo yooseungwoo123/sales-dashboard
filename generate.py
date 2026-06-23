@@ -151,11 +151,24 @@ def audio_player(url, aid):
         parts = name.replace('.m4a','').replace('.mp3','').split('_')
         name = '_'.join(parts[2:])[:28] if len(parts)>=3 else name[:28]
     except: name = "녹취"
-    return (f'<div style="display:flex;align-items:center;gap:8px;background:#f0fdf4;border:0.5px solid #bbf7d0;border-radius:6px;padding:5px 8px;margin-bottom:3px">'
-            f'<button onclick="var a=document.getElementById(\'{aid}\');if(a.paused){{a.play();this.innerHTML=\'&#9646;&#9646;\'}}else{{a.pause();this.innerHTML=\'&#9654;\'}}" '
-            f'style="width:24px;height:24px;border-radius:50%;background:#15803d;border:none;cursor:pointer;color:#fff;font-size:10px;flex-shrink:0">&#9654;</button>'
-            f'<audio id="{aid}" src="{esc(url)}"></audio>'
-            f'<span style="font-size:10px;color:#15803d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{esc(name)}</span></div>')
+    return (
+        f'<div class="ap-wrap" data-aid="{aid}" style="background:#f0fdf4;border:0.5px solid #bbf7d0;border-radius:8px;padding:7px 10px;margin-bottom:5px">'
+        f'<audio id="{aid}" src="{esc(url)}" preload="metadata"></audio>'
+        f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">'
+        f'<button id="{aid}_btn" onclick="apToggle(\'{aid}\')" '
+        f'style="width:26px;height:26px;border-radius:50%;background:#15803d;border:none;cursor:pointer;color:#fff;font-size:11px;flex-shrink:0;display:flex;align-items:center;justify-content:center">&#9654;</button>'
+        f'<button onclick="apSeek(\'{aid}\',-10)" title="10초 뒤로" '
+        f'style="width:22px;height:22px;border-radius:50%;background:#bbf7d0;border:none;cursor:pointer;color:#15803d;font-size:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center">-10</button>'
+        f'<button onclick="apSeek(\'{aid}\',10)" title="10초 앞으로" '
+        f'style="width:22px;height:22px;border-radius:50%;background:#bbf7d0;border:none;cursor:pointer;color:#15803d;font-size:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center">+10</button>'
+        f'<span style="font-size:10px;color:#15803d;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{esc(name)}</span>'
+        f'<span id="{aid}_time" style="font-size:10px;color:#15803d;white-space:nowrap;font-variant-numeric:tabular-nums">0:00 / 0:00</span>'
+        f'</div>'
+        f'<div style="position:relative;height:6px;background:#bbf7d0;border-radius:3px;cursor:pointer" onclick="apClick(\'{aid}\',event,this)">'
+        f'<div id="{aid}_bar" style="height:100%;width:0%;background:#15803d;border-radius:3px;transition:width 0.1s linear;pointer-events:none"></div>'
+        f'</div>'
+        f'</div>'
+    )
 
 def render_card(p, today):
     d = p['days'].get(today, {})
@@ -220,29 +233,27 @@ def render_card(p, today):
         has_sched = bool(fb.get('sched_photos') or fb.get('detail'))
         c_imgs = ''.join(img_tag(u) for u in fb.get('consult_photos',[]))
 
-        if has_sched:
-            sp_imgs = ''.join(img_tag(u) for u in fb.get('sched_photos',[]))
-            left = (f'<div style="display:flex;flex-direction:column;gap:8px">'
-                    f'{f"<div style=border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden><div style=background:#e8f0fe;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#1565c0>&#128247; {esc(biz)} 일정사진</div><div style=padding:8px 10px>{sp_imgs}</div></div>" if sp_imgs else ""}'
-                    f'{f"<div style=border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden><div style=background:#e8f0fe;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#1565c0>&#128203; {esc(biz)} 상세내용</div><div style=padding:8px 10px;font-size:13px;color:#323338;line-height:1.75;white-space:pre-wrap;word-break:break-word>{esc(fb.get(chr(100)+chr(101)+chr(116)+chr(97)+chr(105)+chr(108),chr(32)))}</div></div>" if fb.get("detail") else ""}'
-                    f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden">'
-                    f'<div style="background:#fafbfc;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#323338">&#127970; {esc(biz)}</div>'
-                    f'<div style="padding:8px 10px;font-size:13px;color:#323338;line-height:1.8;white-space:pre-wrap;word-break:break-word">{esc(fb["text"])}</div>'
-                    f'{f"<div style=padding:6px 10px;border-top:0.5px solid #e6e9ef;background:#fafbfc>{aud_h}</div>" if aud_h else ""}'
-                    f'</div></div>')
-        else:
-            left = (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden;height:100%">'
-                    f'<div style="background:#fafbfc;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#323338">&#127970; {esc(biz)}</div>'
-                    f'<div style="padding:8px 10px;font-size:13px;color:#323338;line-height:1.8;white-space:pre-wrap;word-break:break-word">{esc(fb["text"])}</div>'
-                    f'{f"<div style=padding:6px 10px;border-top:0.5px solid #e6e9ef;background:#fafbfc>{aud_h}</div>" if aud_h else ""}'
-                    f'</div>')
+        sp_imgs = ''.join(img_tag(u) for u in fb.get('sched_photos',[])) if has_sched else ''
+        detail_val = fb.get('detail','')
 
-        right = (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden;height:100%">'
+        # 왼쪽: 자가피드백 → 일정사진 → 상세내용 (위에서 아래)
+        left = (f'<div style="display:flex;flex-direction:column;gap:8px">'
+                + f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden">'
+                + f'<div style="background:#fafbfc;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#323338">&#127970; {esc(biz)}</div>'
+                + f'<div style="padding:8px 10px;font-size:13px;color:#323338;line-height:1.8;white-space:pre-wrap;word-break:break-word">{esc(fb["text"])}</div>'
+                + (f'<div style="padding:6px 10px;border-top:0.5px solid #e6e9ef;background:#fafbfc">{aud_h}</div>' if aud_h else '')
+                + f'</div>'
+                + (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden"><div style="background:#e8f0fe;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#1565c0">&#128247; {esc(biz)} 일정사진</div><div style="padding:8px 10px">{sp_imgs}</div></div>' if sp_imgs else '')
+                + (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden"><div style="background:#e8f0fe;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#1565c0">&#128203; {esc(biz)} 상세내용</div><div style="padding:8px 10px;font-size:13px;color:#323338;line-height:1.75;white-space:pre-wrap;word-break:break-word">{esc(detail_val)}</div></div>' if detail_val else '')
+                + f'</div>')
+
+        # 오른쪽: 상담일지 (상단 동일선상)
+        right = (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden">'
                  f'<div style="background:#fafbfc;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#323338">&#128203; {esc(biz)} 상담일지</div>'
                  f'<div style="padding:8px 10px">{c_imgs if c_imgs else "<span style=font-size:10px;color:#ccc>없음</span>"}</div>'
                  f'</div>')
 
-        pairs_html += (f'<div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-bottom:10px">'
+        pairs_html += (f'<div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-bottom:10px;align-items:start">'
                        f'<div>{left}</div><div>{right}</div></div>')
 
     fb_section = (f'<div style="font-size:10px;font-weight:700;color:#e2445c;margin-bottom:8px;text-transform:uppercase">상담 자가피드백 &amp; 상담일지</div>'
@@ -382,12 +393,65 @@ function selectDay(el, dateStr) {{
   var wrap = document.getElementById('cards-wrap');
   if (cardsData[dateStr]) {{
     wrap.innerHTML = cardsData[dateStr];
+    initAudios();
   }} else {{
     wrap.innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:13px">해당 날짜 데이터가 없습니다</div>';
   }}
 }}
+function apToggle(aid){{
+  var a=document.getElementById(aid);
+  var btn=document.getElementById(aid+'_btn');
+  if(a.paused){{a.play();btn.innerHTML='&#9646;&#9646;';}}
+  else{{a.pause();btn.innerHTML='&#9654;';}}
+}}
+function apSeek(aid,sec){{
+  var a=document.getElementById(aid);
+  a.currentTime=Math.max(0,Math.min(a.duration||0,a.currentTime+sec));
+}}
+function apClick(aid,e,bar){{
+  var a=document.getElementById(aid);
+  var rect=bar.getBoundingClientRect();
+  var ratio=(e.clientX-rect.left)/rect.width;
+  a.currentTime=(a.duration||0)*ratio;
+}}
+function fmtTime(s){{
+  if(isNaN(s))return'0:00';
+  var m=Math.floor(s/60),sec=Math.floor(s%60);
+  return m+':'+(sec<10?'0':'')+sec;
+}}
+function initAudios(){{
+  document.querySelectorAll('audio').forEach(function(a){{
+    var aid=a.id;
+    a.addEventListener('timeupdate',function(){{
+      var bar=document.getElementById(aid+'_bar');
+      var time=document.getElementById(aid+'_time');
+      if(bar&&a.duration)bar.style.width=(a.currentTime/a.duration*100)+'%';
+      if(time)time.textContent=fmtTime(a.currentTime)+' / '+fmtTime(a.duration);
+    }});
+    a.addEventListener('ended',function(){{
+      var btn=document.getElementById(aid+'_btn');
+      if(btn)btn.innerHTML='&#9654;';
+    }});
+    a.addEventListener('loadedmetadata',function(){{
+      var time=document.getElementById(aid+'_time');
+      if(time)time.textContent='0:00 / '+fmtTime(a.duration);
+    }});
+  }});
+}}
+var activeAid=null;
+document.addEventListener('keydown',function(e){{
+  if(e.key==='Escape')document.getElementById('lb').style.display='none';
+  if((e.key==='ArrowRight'||e.key==='ArrowLeft')&&activeAid){{
+    e.preventDefault();
+    apSeek(activeAid,e.key==='ArrowRight'?10:-10);
+  }}
+}});
+document.addEventListener('click',function(e){{
+  var wrap=e.target.closest('.ap-wrap');
+  if(wrap)activeAid=wrap.dataset.aid;
+}});
 function openLb(src){{var lb=document.getElementById("lb");document.getElementById("lbi").src=src;lb.style.display="flex";}}
-document.addEventListener("keydown",function(e){{if(e.key==="Escape")document.getElementById("lb").style.display="none";}});
+window.addEventListener('load',initAudios);
 </script>
 '''
 
@@ -495,9 +559,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans
             f'el.classList.add("dtab-active");'
             f'var wrap=document.getElementById("cards-wrap");'
             f'wrap.innerHTML=cardsData[dateStr]||"<div style=text-align:center;padding:40px;color:#aaa;font-size:13px>데이터 없음</div>";'
+            f'initAudios();'
             f'}}'
+            f'function apToggle(aid){{var a=document.getElementById(aid);var btn=document.getElementById(aid+"_btn");if(a.paused){{a.play();btn.innerHTML="&#9646;&#9646;"}}else{{a.pause();btn.innerHTML="&#9654;"}}}}'
+            f'function apSeek(aid,sec){{var a=document.getElementById(aid);a.currentTime=Math.max(0,Math.min(a.duration||0,a.currentTime+sec));}}'
+            f'function apClick(aid,e,bar){{var a=document.getElementById(aid);var rect=bar.getBoundingClientRect();a.currentTime=(a.duration||0)*((e.clientX-rect.left)/rect.width);}}'
+            f'function fmtTime(s){{if(isNaN(s))return"0:00";var m=Math.floor(s/60),sec=Math.floor(s%60);return m+":"+(sec<10?"0":"")+sec;}}'
+            f'function initAudios(){{document.querySelectorAll("audio").forEach(function(a){{var aid=a.id;'
+            f'a.addEventListener("timeupdate",function(){{var bar=document.getElementById(aid+"_bar");var time=document.getElementById(aid+"_time");if(bar&&a.duration)bar.style.width=(a.currentTime/a.duration*100)+"%";if(time)time.textContent=fmtTime(a.currentTime)+" / "+fmtTime(a.duration);}});'
+            f'a.addEventListener("ended",function(){{var btn=document.getElementById(aid+"_btn");if(btn)btn.innerHTML="&#9654;";}});'
+            f'a.addEventListener("loadedmetadata",function(){{var time=document.getElementById(aid+"_time");if(time)time.textContent="0:00 / "+fmtTime(a.duration);}});}});}}'
+            f'var activeAid=null;'
+            f'document.addEventListener("click",function(e){{var w=e.target.closest(".ap-wrap");if(w)activeAid=w.dataset.aid;}});'
+            f'document.addEventListener("keydown",function(e){{'
+            f'if(e.key==="Escape")document.getElementById("lb").style.display="none";'
+            f'if((e.key==="ArrowRight"||e.key==="ArrowLeft")&&activeAid){{e.preventDefault();apSeek(activeAid,e.key==="ArrowRight"?10:-10);}}'
+            f'}});'
             f'function openLb(src){{var lb=document.getElementById("lb");document.getElementById("lbi").src=src;lb.style.display="flex";}}'
-            f'document.addEventListener("keydown",function(e){{if(e.key==="Escape")document.getElementById("lb").style.display="none";}});'
+            f'window.addEventListener("load",initAudios);'
             f'</script>'
             f'</div></body></html>')
 
