@@ -1,4 +1,4 @@
-import requests, json, re, os, datetime
+import requests, json, re, os, datetime, calendar, shutil
 
 MONDAY_TOKEN = os.environ['MONDAY_TOKEN']
 BOARD_ID = 5027844606
@@ -106,10 +106,35 @@ def parse_items(items):
 
 def get_today():
     today = datetime.date.today()
-    # 월~금만, 주말이면 금요일로
     if today.weekday() >= 5:
         today = today - datetime.timedelta(days=today.weekday()-4)
     return str(today)
+
+def get_weeks_in_month(year, month):
+    """해당 월의 주차별 날짜 목록 반환 (월~금, 1주차부터 오름차순)"""
+    cal = calendar.Calendar(0)  # 월요일 시작
+    weeks = []
+    month_days = cal.monthdatescalendar(year, month)
+    for week_idx, week in enumerate(month_days):
+        weekdays = []
+        for day in week:
+            if day.weekday() < 5 and day.month == month:
+                weekdays.append(day)
+        if weekdays:
+            weeks.append({'week_num': week_idx + 1, 'days': weekdays})
+    return weeks
+
+def get_month_tabs(current_year, current_month):
+    """최근 3개월 탭 정보 반환"""
+    tabs = []
+    for i in range(3):
+        m = current_month - i
+        y = current_year
+        while m <= 0:
+            m += 12
+            y -= 1
+        tabs.append({'year': y, 'month': m, 'is_current': i == 0})
+    return tabs
 
 def esc(s):
     if not s: return ''
@@ -231,10 +256,55 @@ def render_card(p, today):
             f'</div>{photos_row}{report_row}'
             f'<div style="padding:11px 13px">{fb_section}</div></div>')
 
-def make_html(team_key, persons, today):
+
+def build_nav_js(year, month, today_str, archive_months):
+    """주차 네비게이션 + 월 탭 JS/HTML 생성"""
+    weeks = get_weeks_in_month(year, month)
+    today = datetime.date.fromisoformat(today_str)
+
+    # 월 탭 HTML
+    month_tabs_html = ''
+    for am in archive_months:
+        ay, amm = am['year'], am['month']
+        label = f'{ay}년 {amm}월'
+        if am['is_current']:
+            month_tabs_html += f'<span class="mtab mtab-active">{label}</span>'
+        else:
+            archive_file = f'archive/{ay}-{amm:02d}/{{team}}.html'
+            month_tabs_html += f'<a class="mtab" href="{archive_file}">&#128193; {label}</a>'
+
+    # 주차 행 HTML (1주차 위, 오름차순)
+    weeks_html = ''
+    for w in weeks:
+        wnum = w['week_num']
+        day_cells = ''
+        for d in w['days']:
+            ds = str(d)
+            wd_names = ['월','화','수','목','금']
+            wd_name = wd_names[d.weekday()]
+            date_label = f'{d.month}/{d.day}'
+            is_today = (d == today)
+            is_future = (d > today)
+            if is_future:
+                day_cells += f'<div class="dtab dtab-disabled"><span class="dname">{wd_name}</span>{date_label}</div>'
+            elif is_today:
+                day_cells += f'<div class="dtab dtab-today" onclick="selectDay(this,\'{ds}\')" data-date="{ds}"><span class="dname">{wd_name}</span>{date_label} ●</div>'
+            else:
+                day_cells += f'<div class="dtab" onclick="selectDay(this,\'{ds}\')" data-date="{ds}"><span class="dname">{wd_name}</span>{date_label}</div>'
+
+        weeks_html += (f'<div class="week-row">'
+                       f'<div class="week-label">{wnum}주차</div>'
+                       f'<div class="day-cells">{day_cells}</div>'
+                       f'</div>')
+
+    return month_tabs_html, weeks_html
+
+
+def make_html(team_key, persons, today, year, month, archive_months):
     team = TEAMS[team_key]
     now = datetime.datetime.now().strftime('%Y.%m.%d %H:%M')
     cards = ''.join(render_card(p, today) for p in persons)
+
     total_new = 0; total_contract = 0; total_confirm = 0
     for p in persons:
         d = p['days'].get(today, {})
@@ -246,10 +316,86 @@ def make_html(team_key, persons, today):
         if m: total_contract += float(m.group(1))
         if d.get('confirm','') == '컨펌 완료': total_confirm += 1
 
+    month_tabs_html, weeks_html = build_nav_js(year, month, today, archive_months)
+    # 아카이브 링크의 {team} 플레이스홀더를 실제 팀 키로 교체
+    month_tabs_html = month_tabs_html.replace('{team}', team_key)
+
+    nav_html = f'''
+<div style="background:#fff;border:0.5px solid #e6e9ef;border-radius:12px;overflow:hidden;margin-bottom:14px">
+  <div style="padding:10px 14px;border-bottom:0.5px solid #e6e9ef;background:#fafbfc;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="font-size:12px;font-weight:700;color:#323338">&#128197; 월 선택</span>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">{month_tabs_html}</div>
+    <span style="margin-left:auto;font-size:10px;color:#aaa">&#128193; 이전 달은 아카이브</span>
+  </div>
+  <div style="padding:10px 14px">
+    <div style="font-size:11px;color:#676879;margin-bottom:8px">주차 선택 후 날짜를 클릭하세요</div>
+    <div id="week-nav">{weeks_html}</div>
+  </div>
+</div>
+<div id="cards-wrap">{cards}</div>
+'''
+
+    nav_css = '''
+<style>
+.mtab{display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;border:0.5px solid #e6e9ef;background:#fff;color:#676879;text-decoration:none;cursor:pointer}
+.mtab-active{background:#0073ea;color:#fff;border-color:#0073ea}
+.week-row{display:flex;align-items:stretch;border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden;margin-bottom:6px}
+.week-label{padding:7px 12px;font-size:11px;font-weight:700;color:#676879;background:#fafbfc;border-right:0.5px solid #e6e9ef;min-width:52px;display:flex;align-items:center;cursor:default}
+.day-cells{display:flex;flex:1}
+.dtab{flex:1;padding:7px 4px;text-align:center;font-size:11px;cursor:pointer;border-right:0.5px solid #e6e9ef;color:#323338;background:#fff;transition:background 0.1s}
+.dtab:last-child{border-right:none}
+.dtab:hover{background:#f0f4ff}
+.dtab-active{background:#0073ea;color:#fff;font-weight:700}
+.dtab-today{color:#0073ea;font-weight:700}
+.dtab-today.dtab-active{background:#0073ea;color:#fff}
+.dtab-disabled{flex:1;padding:7px 4px;text-align:center;font-size:11px;color:#ccc;background:#fafbfc;border-right:0.5px solid #e6e9ef}
+.dtab-disabled:last-child{border-right:none}
+.dname{display:block;font-size:10px;opacity:0.7}
+</style>
+'''
+
+    # 날짜별 카드 데이터를 JS로 생성 (클릭 시 해당 날짜 카드로 교체)
+    # 날짜별로 cards HTML을 미리 생성
+    all_dates = []
+    cal = calendar.Calendar(0)
+    for week in cal.monthdatescalendar(year, month):
+        for d in week:
+            if d.weekday() < 5 and d.month == month:
+                all_dates.append(str(d))
+
+    cards_by_date = {}
+    today_dt = datetime.date.fromisoformat(today)
+    for ds in all_dates:
+        if datetime.date.fromisoformat(ds) <= today_dt:
+            cards_by_date[ds] = ''.join(render_card(p, ds) for p in persons)
+
+    cards_json = json.dumps(cards_by_date, ensure_ascii=False)
+
+    nav_js = f'''
+<script>
+var cardsData = {cards_json};
+function selectDay(el, dateStr) {{
+  document.querySelectorAll('.dtab').forEach(function(t) {{
+    t.classList.remove('dtab-active');
+  }});
+  el.classList.add('dtab-active');
+  var wrap = document.getElementById('cards-wrap');
+  if (cardsData[dateStr]) {{
+    wrap.innerHTML = cardsData[dateStr];
+  }} else {{
+    wrap.innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:13px">해당 날짜 데이터가 없습니다</div>';
+  }}
+}}
+function openLb(src){{var lb=document.getElementById("lb");document.getElementById("lbi").src=src;lb.style.display="flex";}}
+document.addEventListener("keydown",function(e){{if(e.key==="Escape")document.getElementById("lb").style.display="none";}});
+</script>
+'''
+
     return (f'<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">'
             f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
             f'<title>{team["name"]} 일간 보고</title>'
-            f'<style>*{{box-sizing:border-box;margin:0;padding:0}}body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;background:#f5f6f8;color:#323338;font-size:13px}.wrap{max-width:900px;margin:0 auto;padding:12px 14px}}</style>'
+            f'{nav_css}'
+            f'<style>*{{box-sizing:border-box;margin:0;padding:0}}body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;background:#f5f6f8;color:#323338;font-size:13px}}.wrap{{max-width:900px;margin:0 auto;padding:12px 14px}}</style>'
             f'</head><body><div class="wrap">'
             f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">'
             f'<div style="font-size:14px;font-weight:700;color:#323338;display:flex;align-items:center;gap:6px">'
@@ -260,24 +406,141 @@ def make_html(team_key, persons, today):
             f'<div style="background:#fff;padding:4px 10px;border-radius:6px;border:0.5px solid #e6e9ef;font-size:11px;color:#676879">신규 <b style="color:#323338">{total_new}건</b></div>'
             f'<div style="background:#fff;padding:4px 10px;border-radius:6px;border:0.5px solid #e6e9ef;font-size:11px;color:#676879">계약 <b style="color:#323338">{total_contract:.0f}건</b></div>'
             f'<div style="background:#fff;padding:4px 10px;border-radius:6px;border:0.5px solid #e6e9ef;font-size:11px;color:#676879">컨펌 <b style="color:#323338">{total_confirm}/{len(persons)}</b></div>'
-            f'</div></div>{cards}</div>'
+            f'</div></div>'
+            f'{nav_html}'
             f'<div id="lb" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;align-items:center;justify-content:center" onclick="this.style.display=\'none\'">'
             f'<img id="lbi" style="max-width:95vw;max-height:95vh;border-radius:8px;object-fit:contain"></div>'
-            f'<script>function openLb(src){{var lb=document.getElementById("lb");document.getElementById("lbi").src=src;lb.style.display="flex";}}'
-            f'document.addEventListener("keydown",function(e){{if(e.key==="Escape")document.getElementById("lb").style.display="none";}});</script>'
-            f'</body></html>')
+            f'{nav_js}'
+            f'</div></body></html>')
 
+
+def make_archive_html(team_key, persons, year, month, all_persons_days):
+    """월별 아카이브 HTML - 해당 월 전체 데이터 포함"""
+    team = TEAMS[team_key]
+    now = datetime.datetime.now().strftime('%Y.%m.%d %H:%M')
+    weeks = get_weeks_in_month(year, month)
+
+    # 이 달의 모든 평일 날짜 중 첫 번째를 기본 표시
+    all_weekdays = []
+    for w in weeks:
+        for d in w['days']:
+            all_weekdays.append(str(d))
+
+    default_date = all_weekdays[-1] if all_weekdays else f'{year}-{month:02d}-01'
+
+    # 날짜별 카드 데이터
+    cards_by_date = {}
+    for ds in all_weekdays:
+        cards_by_date[ds] = ''.join(render_card(p, ds) for p in persons)
+
+    cards_json = json.dumps(cards_by_date, ensure_ascii=False)
+    default_cards = cards_by_date.get(default_date, '')
+
+    # 주차 네비게이션
+    weeks_html = ''
+    for w in weeks:
+        wnum = w['week_num']
+        day_cells = ''
+        for d in w['days']:
+            ds = str(d)
+            wd_names = ['월','화','수','목','금']
+            wd_name = wd_names[d.weekday()]
+            date_label = f'{d.month}/{d.day}'
+            is_default = (ds == default_date)
+            cls = 'dtab dtab-active' if is_default else 'dtab'
+            day_cells += f'<div class="{cls}" onclick="selectDay(this,\'{ds}\')" data-date="{ds}"><span class="dname">{wd_name}</span>{date_label}</div>'
+        weeks_html += (f'<div class="week-row">'
+                       f'<div class="week-label">{wnum}주차</div>'
+                       f'<div class="day-cells">{day_cells}</div>'
+                       f'</div>')
+
+    nav_css = '''<style>
+.week-row{display:flex;align-items:stretch;border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden;margin-bottom:6px}
+.week-label{padding:7px 12px;font-size:11px;font-weight:700;color:#676879;background:#fafbfc;border-right:0.5px solid #e6e9ef;min-width:52px;display:flex;align-items:center}
+.day-cells{display:flex;flex:1}
+.dtab{flex:1;padding:7px 4px;text-align:center;font-size:11px;cursor:pointer;border-right:0.5px solid #e6e9ef;color:#323338;background:#fff}
+.dtab:last-child{border-right:none}
+.dtab:hover{background:#f0f4ff}
+.dtab-active{background:#0073ea;color:#fff;font-weight:700}
+.dtab-disabled{flex:1;padding:7px 4px;text-align:center;font-size:11px;color:#ccc;background:#fafbfc;border-right:0.5px solid #e6e9ef}
+.dname{display:block;font-size:10px;opacity:0.7}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;background:#f5f6f8;color:#323338;font-size:13px}
+.wrap{max-width:900px;margin:0 auto;padding:12px 14px}
+</style>'''
+
+    return (f'<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">'
+            f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+            f'<title>{team["name"]} {year}년 {month}월 아카이브</title>'
+            f'{nav_css}'
+            f'</head><body><div class="wrap">'
+            f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">'
+            f'<div style="font-size:14px;font-weight:700;color:#323338;display:flex;align-items:center;gap:6px">'
+            f'<div style="width:8px;height:8px;border-radius:50%;background:{team["color"]}"></div>'
+            f'{team["name"]} {year}년 {month}월 아카이브'
+            f'<span style="font-size:11px;color:#676879;margin-left:6px">저장 {now}</span></div>'
+            f'<a href="../../{team_key}.html" style="margin-left:auto;font-size:11px;color:#0073ea;text-decoration:none">&#8592; 현재 대시보드</a>'
+            f'</div>'
+            f'<div style="background:#fff;border:0.5px solid #e6e9ef;border-radius:12px;overflow:hidden;margin-bottom:14px">'
+            f'<div style="padding:10px 14px;border-bottom:0.5px solid #e6e9ef;background:#fafbfc">'
+            f'<div style="font-size:11px;color:#676879;margin-bottom:8px">날짜를 클릭하세요</div>'
+            f'<div>{weeks_html}</div></div></div>'
+            f'<div id="cards-wrap">{default_cards}</div>'
+            f'<div id="lb" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;align-items:center;justify-content:center" onclick="this.style.display=\'none\'">'
+            f'<img id="lbi" style="max-width:95vw;max-height:95vh;border-radius:8px;object-fit:contain"></div>'
+            f'<script>'
+            f'var cardsData={cards_json};'
+            f'function selectDay(el,dateStr){{'
+            f'document.querySelectorAll(".dtab").forEach(function(t){{t.classList.remove("dtab-active");}});'
+            f'el.classList.add("dtab-active");'
+            f'var wrap=document.getElementById("cards-wrap");'
+            f'wrap.innerHTML=cardsData[dateStr]||"<div style=text-align:center;padding:40px;color:#aaa;font-size:13px>데이터 없음</div>";'
+            f'}}'
+            f'function openLb(src){{var lb=document.getElementById("lb");document.getElementById("lbi").src=src;lb.style.display="flex";}}'
+            f'document.addEventListener("keydown",function(e){{if(e.key==="Escape")document.getElementById("lb").style.display="none";}});'
+            f'</script>'
+            f'</div></body></html>')
+
+
+# ── 메인 실행 ──────────────────────────────────────────────
 print("monday.com 데이터 불러오는 중...")
 items = fetch_board()
 all_persons = parse_items(items)
 today = get_today()
+today_dt = datetime.date.fromisoformat(today)
+year = today_dt.year
+month = today_dt.month
+
 print(f"오늘 날짜: {today}, 팀원 수: {len(all_persons)}")
+
+# 최근 3개월 탭 정보
+archive_months = get_month_tabs(year, month)
 
 files = {'team1':'team1.html','team2':'team2.html','cheongju':'cheongju.html'}
 for team_key, filename in files.items():
     members = TEAMS[team_key]['members']
     team_persons = [p for p in all_persons if any(m in p['name'] for m in members)]
-    html = make_html(team_key, team_persons, today)
+    html = make_html(team_key, team_persons, today, year, month, archive_months)
     with open(filename, 'w', encoding='utf-8') as f:
         f.write(html)
     print(f"{TEAMS[team_key]['name']}: {len(team_persons)}명 → {filename} 생성완료")
+
+# ── 월말 아카이브 (말일이거나 수동 실행 시 FORCE_ARCHIVE=1) ──
+last_day = calendar.monthrange(year, month)[1]
+is_last_workday = False
+check = datetime.date(year, month, last_day)
+while check.weekday() >= 5:
+    check -= datetime.timedelta(days=1)
+is_last_workday = (today_dt == check)
+
+if is_last_workday or os.environ.get('FORCE_ARCHIVE') == '1':
+    print(f"월말 아카이브 생성 중: {year}-{month:02d}")
+    archive_dir = f'archive/{year}-{month:02d}'
+    os.makedirs(archive_dir, exist_ok=True)
+    for team_key in files:
+        members = TEAMS[team_key]['members']
+        team_persons = [p for p in all_persons if any(m in p['name'] for m in members)]
+        html = make_archive_html(team_key, team_persons, year, month, None)
+        with open(f'{archive_dir}/{team_key}.html', 'w', encoding='utf-8') as f:
+            f.write(html)
+        print(f"  아카이브: {archive_dir}/{team_key}.html")
