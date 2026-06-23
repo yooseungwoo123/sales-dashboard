@@ -141,7 +141,7 @@ def esc(s):
     return s.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;').replace("'","&#39;")
 
 def img_tag(url):
-    return f'<img src="{esc(url)}" style="width:100%;border-radius:8px;border:0.5px solid #e6e9ef;display:block;cursor:pointer;margin-bottom:4px;object-fit:cover" onclick="openLb(this.src)" loading="lazy" onerror="this.style.display=\'none\'">'
+    return f'<img src="{esc(url)}" style="width:100%;max-width:100%;border-radius:8px;border:0.5px solid #e6e9ef;display:block;cursor:pointer;margin-bottom:4px;object-fit:cover" onclick="openLb(this.src)" loading="lazy" onerror="this.style.display=\'none\'">'
 
 def audio_player(url, aid):
     name = url.split("/")[-1].split("?")[0]
@@ -259,8 +259,8 @@ def render_card(p, today):
                  f'<div style="padding:8px 10px">{c_imgs if c_imgs else "<span style=font-size:10px;color:#ccc>없음</span>"}</div>'
                  f'</div>')
 
-        pairs_html += (f'<div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-bottom:10px;align-items:start">'
-                       f'<div>{left}</div><div>{right}</div></div>')
+        pairs_html += (f'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:10px;margin-bottom:10px;align-items:start">'
+                       f'<div style="min-width:0;overflow:hidden">{left}</div><div style="min-width:0;overflow:hidden">{right}</div></div>')
 
     fb_section = (f'<div style="font-size:10px;font-weight:700;color:#e2445c;margin-bottom:8px;text-transform:uppercase">상담 자가피드백 &amp; 상담일지</div>'
                   f'{pairs_html or "<span style=font-size:12px;color:#ccc>없음</span>"}')
