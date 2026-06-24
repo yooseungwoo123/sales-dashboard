@@ -100,7 +100,11 @@ def parse_items(items):
                 'anal': {'photos':a_ph,'audios':a_au,'videos':a_vi},
                 'schedule': gs(cv.get(COL_SCHED,'')),
                 'retire': gs(cv.get(COL_RETIRE,'')),
-                'feedbacks': fbs, 'confirm': cfv
+                'feedbacks': fbs, 'confirm': cfv,
+                # 슬롯별 원시 데이터 (자가피드백 없어도 표시용)
+                **{f'_fp_{i}': gs(cv.get(FB_PHOTOS[i],'')) for i in range(7) if FB_PHOTOS[i]},
+                **{f'_fd_{i}': gs(cv.get(FB_DETAIL[i],'')) for i in range(7) if FB_DETAIL[i]},
+                **{f'_ff_{i}': gs(cv.get(FB_FILES[i],'')) for i in range(7) if FB_FILES[i]},
             }
     return list(persons.values())
 
@@ -225,18 +229,34 @@ def render_card(p, today):
                   f'<div style="font-size:13px;color:#323338;line-height:1.75;white-space:pre-wrap;word-break:break-word">{esc(retire) or "없음"}</div></div>'
                   f'{video_html}</div>')
 
-    pairs_html = ''
-    for fb in d.get('feedbacks',[]):
-        bm2 = re.search(r'업체명\s*[:：]\s*([^\n]+)', fb['text'])
-        biz = bm2.group(1).strip() if bm2 else f"상담 {fb['idx']}"
-        aud_h = ''.join(audio_player(u, f"aud_{ini}_fb{fb['idx']}_au{i}") for i,u in enumerate(fb.get('audios',[])))
-        has_sched = bool(fb.get('sched_photos') or fb.get('detail'))
-        c_imgs = ''.join(img_tag(u) for u in fb.get('consult_photos',[]))
+    # 자가피드백 개수 기준으로 최대 인덱스 결정 (피드백 없어도 일정사진/상세내용/상담일지 표시)
+    max_idx = max(len(d.get('feedbacks', [])), max(
+        (i+1 for i in range(7) if
+         (FB_PHOTOS[i] and pf(gs(d.get('_raw_fb_photos_'+str(i), '')))) or
+         (FB_DETAIL[i] and gs(d.get('_raw_fb_detail_'+str(i), ''))) or
+         (FB_FILES[i] and pf(gs(d.get('_raw_fb_files_'+str(i), ''))))
+        ), default=0
+    )) if False else len(d.get('feedbacks', []))
 
-        sp_imgs = ''.join(img_tag(u) for u in fb.get('sched_photos',[])) if has_sched else ''
+    # feedbacks 리스트를 인덱스 기반으로 재구성 (없는 슬롯도 포함)
+    fb_slots = {fb['idx']: fb for fb in d.get('feedbacks', [])}
+
+    # 각 슬롯별로 일정사진/상세내용/상담일지 직접 파싱
+    raw_cv = d.get('_cv', {})
+
+    pairs_html = ''
+    rendered = set()
+
+    for fb in d.get('feedbacks', []):
+        idx = fb['idx']
+        rendered.add(idx)
+        bm2 = re.search(r'업체명\s*[:：]\s*([^\n]+)', fb['text'])
+        biz = bm2.group(1).strip() if bm2 else f"상담 {idx}"
+        aud_h = ''.join(audio_player(u, f"aud_{ini}_fb{idx}_au{i}") for i,u in enumerate(fb.get('audios',[])))
+        c_imgs = ''.join(img_tag(u) for u in fb.get('consult_photos',[]))
+        sp_imgs = ''.join(img_tag(u) for u in fb.get('sched_photos',[]))
         detail_val = fb.get('detail','')
 
-        # 일정사진+상세내용 행 (1:1, 상단)
         sched_row = ''
         if sp_imgs or detail_val:
             sched_row = (f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">'
@@ -244,7 +264,6 @@ def render_card(p, today):
                         + (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden"><div style="background:#e8f0fe;padding:5px 8px;border-bottom:0.5px solid #e6e9ef;font-size:9px;font-weight:700;color:#1565c0">&#128203; 상세내용</div><div style="padding:6px 8px;font-size:11px;color:#323338;line-height:1.6;white-space:pre-wrap;word-break:break-word">{esc(detail_val)}</div></div>' if detail_val else '<div></div>')
                         + f'</div>')
 
-        # 자가피드백 (하단)
         fb_box = (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden">'
                 + f'<div style="background:#fafbfc;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#323338">&#127970; {esc(biz)}</div>'
                 + f'<div style="padding:8px 10px;font-size:13px;color:#323338;line-height:1.8;white-space:pre-wrap;word-break:break-word">{esc(fb["text"])}</div>'
@@ -252,13 +271,42 @@ def render_card(p, today):
                 + f'</div>')
 
         left = f'<div style="display:flex;flex-direction:column;gap:0">{sched_row}{fb_box}</div>'
-
-        # 오른쪽 2/3: 상담일지
         right = (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden">'
                  f'<div style="background:#fafbfc;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#323338">&#128203; {esc(biz)} 상담일지</div>'
                  f'<div style="padding:8px 10px">{c_imgs if c_imgs else "<span style=font-size:10px;color:#ccc>없음</span>"}</div>'
                  f'</div>')
+        pairs_html += (f'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:10px;margin-bottom:10px;align-items:start">'
+                       f'<div style="min-width:0;overflow:hidden">{left}</div><div style="min-width:0;overflow:hidden">{right}</div></div>')
 
+    # 자가피드백은 없지만 일정사진/상세내용/상담일지가 있는 슬롯 추가 표시
+    for i, col in enumerate(FB_TEXTS):
+        slot_idx = i + 1
+        if slot_idx in rendered: continue
+        fp = pf(gs(d.get('_fp_'+str(i), '')))
+        ff = pf(gs(d.get('_ff_'+str(i), '')))
+        detail_val = gs(d.get('_fd_'+str(i), ''))
+        sp_imgs_list = [f for f in fp if ft(f)=="photo"]
+        c_imgs_list = [f for f in ff if ft(f)=="photo"]
+        sp_imgs = ''.join(img_tag(u) for u in sp_imgs_list)
+        c_imgs = ''.join(img_tag(u) for u in c_imgs_list)
+        if not (sp_imgs or detail_val or c_imgs): continue
+
+        biz = f"상담 {slot_idx}"
+        sched_row = ''
+        if sp_imgs or detail_val:
+            sched_row = (f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">'
+                        + (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden"><div style="background:#e8f0fe;padding:5px 8px;border-bottom:0.5px solid #e6e9ef;font-size:9px;font-weight:700;color:#1565c0">&#128247; 일정사진</div><div style="padding:6px 8px;max-height:130px;overflow:hidden">{sp_imgs}</div></div>' if sp_imgs else '<div></div>')
+                        + (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden"><div style="background:#e8f0fe;padding:5px 8px;border-bottom:0.5px solid #e6e9ef;font-size:9px;font-weight:700;color:#1565c0">&#128203; 상세내용</div><div style="padding:6px 8px;font-size:11px;color:#323338;line-height:1.6;white-space:pre-wrap;word-break:break-word">{esc(detail_val)}</div></div>' if detail_val else '<div></div>')
+                        + f'</div>')
+        fb_box = (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden">'
+                + f'<div style="background:#fafbfc;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#aaa">&#127970; {esc(biz)} <span style="font-size:9px;color:#ccc">(자가피드백 미입력)</span></div>'
+                + f'<div style="padding:8px 10px;font-size:12px;color:#ccc">미입력</div>'
+                + f'</div>')
+        left = f'<div style="display:flex;flex-direction:column;gap:0">{sched_row}{fb_box}</div>'
+        right = (f'<div style="border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden">'
+                 f'<div style="background:#fafbfc;padding:6px 10px;border-bottom:0.5px solid #e6e9ef;font-size:10px;font-weight:700;color:#323338">&#128203; {esc(biz)} 상담일지</div>'
+                 f'<div style="padding:8px 10px">{c_imgs if c_imgs else "<span style=font-size:10px;color:#ccc>없음</span>"}</div>'
+                 f'</div>')
         pairs_html += (f'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:10px;margin-bottom:10px;align-items:start">'
                        f'<div style="min-width:0;overflow:hidden">{left}</div><div style="min-width:0;overflow:hidden">{right}</div></div>')
 
