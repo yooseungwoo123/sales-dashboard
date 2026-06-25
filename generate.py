@@ -265,16 +265,6 @@ def fetch_board():
               id name
               column_values {
                 id text value
-                ... on FileValue {
-                  files {
-                    ... on FileAssetValue {
-                      asset {
-                        url
-                        name
-                      }
-                    }
-                  }
-                }
               }
             }
           }
@@ -283,7 +273,7 @@ def fetch_board():
     }'''
     r = requests.post(
         'https://api.monday.com/v2',
-        headers={'Authorization': MONDAY_TOKEN, 'Content-Type': 'application/json', 'API-Version': '2024-01'},
+        headers={'Authorization': MONDAY_TOKEN, 'Content-Type': 'application/json'},
         json={'query': query, 'variables': {'boardId': str(BOARD_ID)}}
     )
     data = r.json()
@@ -306,7 +296,12 @@ def parse_items(items):
         if pname not in persons: persons[pname] = {'name': pname, 'days': {}}
         for s in subs:
             cv_list = s.get('column_values', [])
-            cv = {c['id']: c['text'] or c['value'] or '' for c in cv_list}
+            cv = {}
+            for c in cv_list:
+                # text에 URL이 있으면 text, 없으면 value 사용
+                text_val = (c.get('text') or '').strip()
+                val = (c.get('value') or '').strip()
+                cv[c['id']] = text_val if text_val else val
             date_val = gs(cv.get('date0', ''))
             if not date_val: continue
             cfv = gs(cv.get(COL_CONFIRM, ''))
@@ -315,15 +310,15 @@ def parse_items(items):
                 txt = gs(cv.get(col, ''))
                 if not txt.strip(): continue
                 detail = gs(cv.get(FB_DETAIL[i], '')) if FB_DETAIL[i] else ''
-                fp = extract_file_urls(cv_list, FB_PHOTOS[i]) if FB_PHOTOS[i] else []
-                ff = extract_file_urls(cv_list, FB_FILES[i]) if FB_FILES[i] else []
+                fp = pf(gs(cv.get(FB_PHOTOS[i], ''))) if FB_PHOTOS[i] else []
+                ff = pf(gs(cv.get(FB_FILES[i], ''))) if FB_FILES[i] else []
                 sched_photos = [f for f in fp if ft(f)=="photo"]
                 consult_photos = [f for f in ff if ft(f)=="photo"]
                 audios = [f for f in ff if ft(f)=="audio"] + [f for f in fp if ft(f)=="audio"]
                 fbs.append({'text':txt,'detail':detail,'sched_photos':sched_photos,'consult_photos':consult_photos,'audios':audios,'idx':i+1})
-            d_ph,d_au,d_vi = group(extract_file_urls(cv_list, COL_DIARY))
-            c_ph,c_au,c_vi = group(extract_file_urls(cv_list, COL_CALL))
-            a_ph,a_au,a_vi = group(extract_file_urls(cv_list, COL_ANAL))
+            d_ph,d_au,d_vi = group(pf(gs(cv.get(COL_DIARY,''))))
+            c_ph,c_au,c_vi = group(pf(gs(cv.get(COL_CALL,''))))
+            a_ph,a_au,a_vi = group(pf(gs(cv.get(COL_ANAL,''))))
             persons[pname]['days'][date_val] = {
                 'weekday': s['name'],
                 'diary': {'photos':d_ph,'audios':d_au,'videos':d_vi},
@@ -332,9 +327,9 @@ def parse_items(items):
                 'schedule': gs(cv.get(COL_SCHED,'')),
                 'retire': gs(cv.get(COL_RETIRE,'')),
                 'feedbacks': fbs, 'confirm': cfv,
-                **{f'_fp_{i}': ','.join(extract_file_urls(cv_list, FB_PHOTOS[i])) for i in range(7) if FB_PHOTOS[i]},
+                **{f'_fp_{i}': gs(cv.get(FB_PHOTOS[i],'')) for i in range(7) if FB_PHOTOS[i]},
                 **{f'_fd_{i}': gs(cv.get(FB_DETAIL[i],'')) for i in range(7) if FB_DETAIL[i]},
-                **{f'_ff_{i}': ','.join(extract_file_urls(cv_list, FB_FILES[i])) for i in range(7) if FB_FILES[i]},
+                **{f'_ff_{i}': gs(cv.get(FB_FILES[i],'')) for i in range(7) if FB_FILES[i]},
             }
     return list(persons.values())
 
