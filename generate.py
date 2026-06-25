@@ -562,7 +562,11 @@ def build_nav_js(year, month, today_str, archive_months):
 def make_html(team_key, persons, today, year, month, archive_months, report_data=None):
     team = TEAMS[team_key]
     now = datetime.datetime.now().strftime('%Y.%m.%d %H:%M')
-    cards = ''.join(render_card(p, today) for p in persons)
+    # 첫 번째 카드에 first-card 클래스 추가 (nav-section과 직선 연결)
+    cards_list = [render_card(p, today) for p in persons]
+    if cards_list:
+        cards_list[0] = cards_list[0].replace('<div style="background:#fff;border:0.5px solid #e6e9ef;border-radius:12px;', '<div style="background:#fff;border:0.5px solid #e6e9ef;border-top:none;border-radius:0 0 12px 12px;', 1)
+    cards = ''.join(cards_list)
 
     total_new = 0; total_contract = 0; total_confirm = 0
     for p in persons:
@@ -652,7 +656,10 @@ def make_html(team_key, persons, today, year, month, archive_months, report_data
     today_dt = datetime.date.fromisoformat(today)
     for ds in all_dates:
         if datetime.date.fromisoformat(ds) <= today_dt:
-            cards_by_date[ds] = ''.join(render_card(p, ds) for p in persons)
+            cl = [render_card(p, ds) for p in persons]
+            if cl:
+                cl[0] = cl[0].replace('<div style="background:#fff;border:0.5px solid #e6e9ef;border-radius:12px;', '<div style="background:#fff;border:0.5px solid #e6e9ef;border-top:none;border-radius:0 0 12px 12px;', 1)
+            cards_by_date[ds] = ''.join(cl)
 
     cards_json = json.dumps(cards_by_date, ensure_ascii=False)
 
@@ -767,7 +774,7 @@ window.addEventListener('load',initAudios);
             f'.mtab{{display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;border:0.5px solid #e6e9ef;background:#fff;color:#676879;text-decoration:none;cursor:pointer}}'
             f'.mtab-active{{background:#0073ea;color:#fff;border-color:#0073ea}}'
             f'.nav-section{{background:#fff;border:0.5px solid #e6e9ef;border-radius:12px 12px 0 0;overflow:hidden;margin-bottom:0;border-bottom:none}}'
-            f'#cards-wrap>div:first-child{{border-top:0.5px solid #e6e9ef;border-radius:0 0 12px 12px;margin-bottom:14px}}'
+            f'.first-card{{border-top:none!important;border-radius:0 0 12px 12px!important;margin-top:0!important}}'
             f'.nav-section-hdr{{padding:10px 14px;border-bottom:0.5px solid #e6e9ef;background:#fafbfc;display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer;user-select:none}}'
             f'.week-row{{display:flex;align-items:stretch;border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden;margin-bottom:6px}}'
             f'.week-label{{padding:7px 12px;font-size:11px;font-weight:700;color:#676879;background:#fafbfc;border-right:0.5px solid #e6e9ef;min-width:52px;display:flex;align-items:center;cursor:default}}'
