@@ -480,7 +480,10 @@ def render_card(p, today):
         c_imgs = ''.join(img_tag(u) for u in c_imgs_list)
         if not (sp_imgs or detail_val or c_imgs): continue
 
-        biz = f"상담 {slot_idx}"
+        # 상세내용에서 업체명 파싱 시도
+        biz_match = re.search(r'업체명\s*[:：]\s*([^\n]+)', detail_val) if detail_val else None
+        biz = biz_match.group(1).strip() if biz_match else f"상담 {slot_idx}"
+
         sched_row = ''
         if sp_imgs or detail_val:
             sched_row = (f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">'
@@ -587,7 +590,7 @@ def make_html(team_key, persons, today, year, month, archive_months, report_data
     <span style="margin-left:auto;font-size:10px;color:#aaa">&#128193; 이전 달은 아카이브</span>
     <span id="nav-chv" style="font-size:12px;color:#aaa;margin-left:6px">▲</span>
   </div>
-  <div id="nav-body" style="padding:10px 14px">
+  <div id="nav-body" style="padding:10px 14px 0 14px">
     <div style="font-size:11px;color:#676879;margin-bottom:8px">주차 선택 후 날짜를 클릭하세요</div>
     <div id="week-nav">{weeks_html}</div>
   </div>
@@ -761,7 +764,8 @@ window.addEventListener('load',initAudios);
             f'<style>*{{box-sizing:border-box;margin:0;padding:0}}body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;background:#f5f6f8;color:#323338;font-size:13px}}.wrap{{max-width:900px;margin:0 auto;padding:12px 14px}}'
             f'.mtab{{display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;border:0.5px solid #e6e9ef;background:#fff;color:#676879;text-decoration:none;cursor:pointer}}'
             f'.mtab-active{{background:#0073ea;color:#fff;border-color:#0073ea}}'
-            f'.nav-section{{background:#fff;border:0.5px solid #e6e9ef;border-radius:12px;overflow:hidden;margin-bottom:14px}}'
+            f'.nav-section{{background:#fff;border:0.5px solid #e6e9ef;border-radius:12px 12px 0 0;overflow:hidden;margin-bottom:0}}'
+            f'#cards-wrap>div:first-child{{border-top:none;border-radius:0 0 12px 12px}}'
             f'.nav-section-hdr{{padding:10px 14px;border-bottom:0.5px solid #e6e9ef;background:#fafbfc;display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer;user-select:none}}'
             f'.week-row{{display:flex;align-items:stretch;border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden;margin-bottom:6px}}'
             f'.week-label{{padding:7px 12px;font-size:11px;font-weight:700;color:#676879;background:#fafbfc;border-right:0.5px solid #e6e9ef;min-width:52px;display:flex;align-items:center;cursor:default}}'
