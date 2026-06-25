@@ -15,7 +15,7 @@ COL_CONFIRM="color_mm2epv27"
 FB_TEXTS=["long_text_mm2efqt4","long_text_mm2ep9ja","long_text_mm2eyexa","long_text_mm2ea524","long_text_mm2egjcb","long_text_mm2e8hg2","long_text_mm2enmmk"]
 FB_DETAIL=["long_text_mm2eqk00","long_text_mm2etqpp","long_text_mm2ezrjp","long_text_mm2e50ks","long_text_mm2e39vj",None,None]
 FB_PHOTOS=["file_mm2efy2b","file_mm2ekbcf","file_mm2en8ax","file_mm2egdeg","file_mm2egmha","file_mm2eqzmt",None]
-FB_FILES=["file_mm2ekzfs","file_mm2er3cj","file_mm2e5n7s","file_mm2e7n1k","file_mm2er9xn","file_mm2ed43y",None]
+FB_FILES=["file_mm2ekzfs","file_mm2er3cj","file_mm2e5n7s","file_mm2e7n1k",None,"file_mm2er9xn","file_mm2ed43y"]
 
 def pf(v): return [s.strip() for s in v.split(',') if s.strip()] if v and isinstance(v,str) else []
 def extract_file_urls(cv_list, col_id):
