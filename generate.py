@@ -471,9 +471,11 @@ def render_card(p, today):
     for i, col in enumerate(FB_TEXTS):
         slot_idx = i + 1
         if slot_idx in rendered: continue
-        fp = pf(gs(d.get('_fp_'+str(i), '')))
-        ff = pf(gs(d.get('_ff_'+str(i), '')))
-        detail_val = gs(d.get('_fd_'+str(i), ''))
+        fp_raw = gs(d.get(f'_fp_{i}', ''))
+        ff_raw = gs(d.get(f'_ff_{i}', ''))
+        detail_val = gs(d.get(f'_fd_{i}', ''))
+        fp = pf(fp_raw)
+        ff = pf(ff_raw)
         sp_imgs_list = [f for f in fp if ft(f)=="photo"]
         c_imgs_list = [f for f in ff if ft(f)=="photo"]
         sp_imgs = ''.join(img_tag(u) for u in sp_imgs_list)
@@ -764,8 +766,8 @@ window.addEventListener('load',initAudios);
             f'<style>*{{box-sizing:border-box;margin:0;padding:0}}body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;background:#f5f6f8;color:#323338;font-size:13px}}.wrap{{max-width:900px;margin:0 auto;padding:12px 14px}}'
             f'.mtab{{display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;border:0.5px solid #e6e9ef;background:#fff;color:#676879;text-decoration:none;cursor:pointer}}'
             f'.mtab-active{{background:#0073ea;color:#fff;border-color:#0073ea}}'
-            f'.nav-section{{background:#fff;border:0.5px solid #e6e9ef;border-radius:12px 12px 0 0;overflow:hidden;margin-bottom:0}}'
-            f'#cards-wrap>div:first-child{{border-top:none;border-radius:0 0 12px 12px}}'
+            f'.nav-section{{background:#fff;border:0.5px solid #e6e9ef;border-radius:12px 12px 0 0;overflow:hidden;margin-bottom:0;border-bottom:none}}'
+            f'#cards-wrap>div:first-child{{border-top:0.5px solid #e6e9ef;border-radius:0 0 12px 12px;margin-bottom:14px}}'
             f'.nav-section-hdr{{padding:10px 14px;border-bottom:0.5px solid #e6e9ef;background:#fafbfc;display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer;user-select:none}}'
             f'.week-row{{display:flex;align-items:stretch;border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden;margin-bottom:6px}}'
             f'.week-label{{padding:7px 12px;font-size:11px;font-weight:700;color:#676879;background:#fafbfc;border-right:0.5px solid #e6e9ef;min-width:52px;display:flex;align-items:center;cursor:default}}'
