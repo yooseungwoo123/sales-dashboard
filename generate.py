@@ -20,23 +20,22 @@ FB_FILES=["file_mm2ekzfs","file_mm2er3cj","file_mm2e5n7s","file_mm2e7n1k","file_
 def pf(v): return [s.strip() for s in v.split(',') if s.strip()] if v and isinstance(v,str) else []
 def extract_file_urls(cv_list, col_id):
     """monday.com 파일 컬럼에서 URL 목록 추출"""
+    import json as _json
     for c in cv_list:
         if c['id'] != col_id: continue
-        # text로 먼저 시도 (쉼표 구분 URL)
-        text = c.get('text', '') or ''
-        if text.strip():
-            urls = [s.strip() for s in text.split(',') if s.strip() and s.strip().startswith('http')]
+        # text 값이 http로 시작하는 URL인 경우 (쉼표 구분)
+        text = (c.get('text') or '').strip()
+        if text and 'http' in text:
+            urls = [s.strip() for s in text.split(',') if s.strip().startswith('http')]
             if urls: return urls
-        # value(JSON)에서 추출
-        val = c.get('value', '') or ''
-        if val and val.strip().startswith('{'):
+        # value JSON에서 추출
+        val = (c.get('value') or '').strip()
+        if val and val.startswith('{'):
             try:
-                import json as _json
                 data = _json.loads(val)
-                files = data.get('files', [])
                 urls = []
-                for f in files:
-                    url = f.get('url', '') or f.get('assetUrl', '')
+                for f in data.get('files', []):
+                    url = (f.get('url') or f.get('assetUrl') or '').strip()
                     if url: urls.append(url)
                 if urls: return urls
             except: pass
