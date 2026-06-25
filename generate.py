@@ -109,7 +109,8 @@ def parse_items(items):
     return list(persons.values())
 
 def get_today():
-    today = datetime.date.today()
+    # 한국시간(KST = UTC+9) 기준
+    today = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date()
     if today.weekday() >= 5:
         today = today - datetime.timedelta(days=today.weekday()-4)
     return str(today)
@@ -325,7 +326,7 @@ def render_card(p, today):
 def build_nav_js(year, month, today_str, archive_months):
     """주차 네비게이션 + 월 탭 JS/HTML 생성"""
     weeks = get_weeks_in_month(year, month)
-    today = datetime.date.fromisoformat(today_str)
+    today = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date()
 
     # 월 탭 HTML
     month_tabs_html = ''
