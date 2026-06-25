@@ -17,23 +17,30 @@ FB_DETAIL=["long_text_mm2eqk00","long_text_mm2etqpp","long_text_mm2ezrjp","long_
 FB_PHOTOS=["file_mm2efy2b","file_mm2ekbcf","file_mm2en8ax","file_mm2egdeg","file_mm2egmha","file_mm2eqzmt",None]
 FB_FILES=["file_mm2ekzfs","file_mm2er3cj","file_mm2e5n7s","file_mm2e7n1k","file_mm2er9xn","file_mm2ed43y",None]
 
-def pf(v):
-    if not v: return []
-    if not isinstance(v, str): return []
-    # JSON value 형태인 경우 (monday.com file column)
-    if v.strip().startswith('{') or v.strip().startswith('['):
-        try:
-            import json as _json
-            data = _json.loads(v)
-            urls = []
-            files = data.get('files', []) if isinstance(data, dict) else []
-            for f in files:
-                url = f.get('url', '') or f.get('assetUrl', '')
-                if url: urls.append(url)
+def pf(v): return [s.strip() for s in v.split(',') if s.strip()] if v and isinstance(v,str) else []
+    """monday.com 파일 컬럼에서 URL 목록 추출"""
+    for c in cv_list:
+        if c['id'] != col_id: continue
+        # text로 먼저 시도 (쉼표 구분 URL)
+        text = c.get('text', '') or ''
+        if text.strip():
+            urls = [s.strip() for s in text.split(',') if s.strip() and s.strip().startswith('http')]
             if urls: return urls
-        except: pass
-    # 쉼표로 구분된 URL 목록
-    return [s.strip() for s in v.split(',') if s.strip()]
+        # value(JSON)에서 추출
+        val = c.get('value', '') or ''
+        if val and val.strip().startswith('{'):
+            try:
+                import json as _json
+                data = _json.loads(val)
+                files = data.get('files', [])
+                urls = []
+                for f in files:
+                    url = f.get('url', '') or f.get('assetUrl', '')
+                    if url: urls.append(url)
+                if urls: return urls
+            except: pass
+        return []
+    return []
 def gs(v):
     if not v: return ''
     if isinstance(v,str): return v
@@ -279,7 +286,8 @@ def parse_items(items):
         if not pname: continue
         if pname not in persons: persons[pname] = {'name': pname, 'days': {}}
         for s in subs:
-            cv = {c['id']: c['text'] or c['value'] or '' for c in s.get('column_values', [])}
+            cv_list = s.get('column_values', [])
+            cv = {c['id']: c['text'] or c['value'] or '' for c in cv_list}
             date_val = gs(cv.get('date0', ''))
             if not date_val: continue
             cfv = gs(cv.get(COL_CONFIRM, ''))
@@ -288,15 +296,15 @@ def parse_items(items):
                 txt = gs(cv.get(col, ''))
                 if not txt.strip(): continue
                 detail = gs(cv.get(FB_DETAIL[i], '')) if FB_DETAIL[i] else ''
-                fp = pf(gs(cv.get(FB_PHOTOS[i], ''))) if FB_PHOTOS[i] else []
-                ff = pf(gs(cv.get(FB_FILES[i], ''))) if FB_FILES[i] else []
+                fp = extract_file_urls(cv_list, FB_PHOTOS[i]) if FB_PHOTOS[i] else []
+                ff = extract_file_urls(cv_list, FB_FILES[i]) if FB_FILES[i] else []
                 sched_photos = [f for f in fp if ft(f)=="photo"]
                 consult_photos = [f for f in ff if ft(f)=="photo"]
                 audios = [f for f in ff if ft(f)=="audio"] + [f for f in fp if ft(f)=="audio"]
                 fbs.append({'text':txt,'detail':detail,'sched_photos':sched_photos,'consult_photos':consult_photos,'audios':audios,'idx':i+1})
-            d_ph,d_au,d_vi = group(pf(gs(cv.get(COL_DIARY,''))))
-            c_ph,c_au,c_vi = group(pf(gs(cv.get(COL_CALL,''))))
-            a_ph,a_au,a_vi = group(pf(gs(cv.get(COL_ANAL,''))))
+            d_ph,d_au,d_vi = group(extract_file_urls(cv_list, COL_DIARY))
+            c_ph,c_au,c_vi = group(extract_file_urls(cv_list, COL_CALL))
+            a_ph,a_au,a_vi = group(extract_file_urls(cv_list, COL_ANAL))
             persons[pname]['days'][date_val] = {
                 'weekday': s['name'],
                 'diary': {'photos':d_ph,'audios':d_au,'videos':d_vi},
@@ -305,10 +313,9 @@ def parse_items(items):
                 'schedule': gs(cv.get(COL_SCHED,'')),
                 'retire': gs(cv.get(COL_RETIRE,'')),
                 'feedbacks': fbs, 'confirm': cfv,
-                # 슬롯별 원시 데이터 (자가피드백 없어도 표시용)
-                **{f'_fp_{i}': gs(cv.get(FB_PHOTOS[i],'')) for i in range(7) if FB_PHOTOS[i]},
+                **{f'_fp_{i}': ','.join(extract_file_urls(cv_list, FB_PHOTOS[i])) for i in range(7) if FB_PHOTOS[i]},
                 **{f'_fd_{i}': gs(cv.get(FB_DETAIL[i],'')) for i in range(7) if FB_DETAIL[i]},
-                **{f'_ff_{i}': gs(cv.get(FB_FILES[i],'')) for i in range(7) if FB_FILES[i]},
+                **{f'_ff_{i}': ','.join(extract_file_urls(cv_list, FB_FILES[i])) for i in range(7) if FB_FILES[i]},
             }
     return list(persons.values())
 
