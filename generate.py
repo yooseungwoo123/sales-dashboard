@@ -23,7 +23,16 @@ def extract_file_urls(cv_list, col_id):
     import json as _json
     for c in cv_list:
         if c['id'] != col_id: continue
-        # text 값이 http로 시작하는 URL인 경우 (쉼표 구분)
+        # GraphQL FileValue의 files 필드 우선 사용
+        files = c.get('files', [])
+        if files:
+            urls = []
+            for f in files:
+                asset = f.get('asset', {}) or {}
+                url = asset.get('url', '')
+                if url: urls.append(url)
+            if urls: return urls
+        # text 값이 URL인 경우 (쉼표 구분)
         text = (c.get('text') or '').strip()
         if text and 'http' in text:
             urls = [s.strip() for s in text.split(',') if s.strip().startswith('http')]
@@ -256,6 +265,16 @@ def fetch_board():
               id name
               column_values {
                 id text value
+                ... on FileValue {
+                  files {
+                    ... on FileAssetValue {
+                      asset {
+                        url
+                        name
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -264,7 +283,7 @@ def fetch_board():
     }'''
     r = requests.post(
         'https://api.monday.com/v2',
-        headers={'Authorization': MONDAY_TOKEN, 'Content-Type': 'application/json'},
+        headers={'Authorization': MONDAY_TOKEN, 'Content-Type': 'application/json', 'API-Version': '2024-01'},
         json={'query': query, 'variables': {'boardId': str(BOARD_ID)}}
     )
     data = r.json()
