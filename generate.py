@@ -140,8 +140,18 @@ def fmt_num(v):
     """소수점 불필요하면 정수로"""
     return int(v) if v == int(v) else round(v, 1)
 
+def get_week_ranges(year, month):
+    """해당 월의 주차별 날짜 범위 반환 [(주차번호, [날짜목록])]"""
+    cal = calendar.Calendar(0)
+    weeks = []
+    for wi, week in enumerate(cal.monthdatescalendar(year, month)):
+        days = [str(d) for d in week if d.weekday() < 5 and d.month == month]
+        if days:
+            weeks.append((wi + 1, days))
+    return weeks
+
 def render_report_section(team_key, report_data, archive_months):
-    """영업팀 일간 보고서 섹션 HTML 생성 (월별 탭 연동)"""
+    """영업팀 일간 보고서 섹션 HTML 생성 (월별 + 주차별 탭)"""
     team = TEAMS[team_key]
     members = team['members']
     COLORS = {
@@ -150,6 +160,53 @@ def render_report_section(team_key, report_data, archive_months):
         '정민규': ('#fef3c7', '#92400e'), '최태웅': ('#fce7f3', '#9d174d'),
         '심승근': ('#ede9fe', '#5b21b6'),
     }
+    wd_names = ['월','화','수','목','금','토','일']
+    KEY_COLS = ['call','consult','outside','inside','contract','fee','baekbaek']
+    COL_LABELS = ['전화콜량','상담수','외근수','내근수','계약수','수임료','백백수']
+
+    def make_rows(row_data, label='합계'):
+        """날짜별 행 + 합계 행 생성"""
+        totals = {k: 0 for k in KEY_COLS}
+        rows = ''
+        for d in sorted(row_data.keys()):
+            r = row_data[d]
+            dt = datetime.date.fromisoformat(d)
+            dlabel = f'{dt.month}월 {dt.day}일 ({wd_names[dt.weekday()]})'
+            rows += f'<tr><td>{dlabel}</td>' + ''.join(f'<td>{fmt_num(r[k])}</td>' for k in KEY_COLS) + '</tr>'
+            for k in KEY_COLS: totals[k] += r[k]
+        rows += f'<tr class="rpt-sum"><td>{label}</td>' + ''.join(f'<td>{fmt_num(totals[k])}</td>' for k in KEY_COLS) + '</tr>'
+        return rows, totals
+
+    def make_member_block(mname, row_data, uid, week_label='합계'):
+        bg, tx = COLORS.get(mname, ('#f1f5f9', '#334155'))
+        ini = re.sub(r'\s*(팀장|부팀장|사원|PM)\s*', '', mname)[:2]
+        rows, totals = make_rows(row_data, week_label)
+        return (
+            f'<div class="rpt-member">'
+            f'<div class="rpt-mhdr" onclick="toggleRpt(\'{uid}\')">'
+            f'<div style="width:26px;height:26px;border-radius:50%;background:{bg};color:{tx};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;flex-shrink:0">{ini}</div>'
+            f'<span style="font-size:12px;font-weight:500">{esc(mname)}</span>'
+            f'<div style="display:flex;gap:10px;margin-left:auto;margin-right:8px">'
+            f'<span class="rpt-badge">상담 <b>{fmt_num(totals["consult"])}</b></span>'
+            f'<span class="rpt-badge">계약 <b>{fmt_num(totals["contract"])}</b></span>'
+            f'<span class="rpt-badge">수임료 <b>{fmt_num(totals["fee"])}</b></span>'
+            f'</div><span class="rpt-chv" id="chv-{uid}">▾</span>'
+            f'</div>'
+            f'<div id="rpt-{uid}" style="display:none;overflow-x:auto">'
+            f'<table class="rpt-table"><thead><tr><th>날짜</th>'
+            + ''.join(f'<th>{c}</th>' for c in COL_LABELS) +
+            f'</tr></thead><tbody>{rows}</tbody></table></div></div>'
+        ), totals
+
+    def make_team_sum(team_totals, label):
+        return (
+            f'<div class="rpt-team-sum">'
+            f'<div style="font-size:11px;font-weight:500;color:#676879;margin-bottom:8px">{team["name"]} 합계 — {label}</div>'
+            f'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">'
+            + ''.join(f'<div style="text-align:center"><div style="font-size:9px;color:#aaa;margin-bottom:2px">{n}</div><div style="font-size:13px;font-weight:500;color:{team["color"]}">{fmt_num(team_totals[k])}</div></div>'
+                      for n, k in zip(COL_LABELS, KEY_COLS))
+            + '</div></div>'
+        )
 
     months_html = ''
     for am in archive_months:
@@ -157,77 +214,83 @@ def render_report_section(team_key, report_data, archive_months):
         mid = f'{y}-{m:02d}'
         label = f'{y}년 {m}월'
         is_cur = am['is_current']
+        week_ranges = get_week_ranges(y, m)
 
-        # 해당 월 팀원별 데이터 수집
-        members_html = ''
-        team_totals = {'call':0,'consult':0,'outside':0,'inside':0,'contract':0,'fee':0,'baekbaek':0}
-
+        # 팀원별 데이터 수집
+        person_month_data = {}
         for mname in members:
-            # report_data에서 이름 매칭 (부분 일치)
             matched_key = next((k for k in report_data if mname in k), None)
             person_data = report_data.get(matched_key, {}) if matched_key else {}
+            person_month_data[mname] = {d: v for d, v in person_data.items() if d.startswith(f'{y}-{m:02d}')}
 
-            # 해당 월 날짜만 필터
-            month_rows = {d: v for d, v in person_data.items() if d.startswith(f'{y}-{m:02d}')}
-
-            # 합계
-            totals = {k: sum(r[k] for r in month_rows.values()) for k in ['call','consult','outside','inside','contract','fee','baekbaek']}
-            for k in team_totals: team_totals[k] += totals[k]
-
+        # ── 전체 탭 ──────────────────────────────
+        all_members_html = ''
+        all_team_totals = {k: 0 for k in KEY_COLS}
+        for mname in members:
+            month_rows = person_month_data[mname]
+            if not month_rows: continue
+            # 전체: 날짜별 + 주차 소계 행 삽입
+            rows_html = ''
+            full_totals = {k: 0 for k in KEY_COLS}
+            for wi, wdays in week_ranges:
+                week_rows = {d: month_rows[d] for d in wdays if d in month_rows}
+                if not week_rows: continue
+                w_totals = {k: 0 for k in KEY_COLS}
+                for d in sorted(week_rows.keys()):
+                    r = week_rows[d]
+                    dt = datetime.date.fromisoformat(d)
+                    rows_html += f'<tr><td>{dt.month}월 {dt.day}일 ({wd_names[dt.weekday()]})</td>' + ''.join(f'<td>{fmt_num(r[k])}</td>' for k in KEY_COLS) + '</tr>'
+                    for k in KEY_COLS: w_totals[k] += r[k]; full_totals[k] += r[k]
+                rows_html += f'<tr class="rpt-wsum"><td>{wi}주차 소계</td>' + ''.join(f'<td>{fmt_num(w_totals[k])}</td>' for k in KEY_COLS) + '</tr>'
+            rows_html += f'<tr class="rpt-sum"><td>합계</td>' + ''.join(f'<td>{fmt_num(full_totals[k])}</td>' for k in KEY_COLS) + '</tr>'
+            for k in KEY_COLS: all_team_totals[k] += full_totals[k]
             bg, tx = COLORS.get(mname, ('#f1f5f9', '#334155'))
             ini = re.sub(r'\s*(팀장|부팀장|사원|PM)\s*', '', mname)[:2]
-            mid2 = f'{mid}-{ini}'
-
-            # 날짜별 행
-            rows_html = ''
-            wd_names = ['월','화','수','목','금','토','일']
-            for d in sorted(month_rows.keys()):
-                r = month_rows[d]
-                dt = datetime.date.fromisoformat(d)
-                dlabel = f'{dt.month}월 {dt.day}일 ({wd_names[dt.weekday()]})'
-                rows_html += (f'<tr><td>{dlabel}</td>'
-                             f'<td>{fmt_num(r["call"])}</td><td>{fmt_num(r["consult"])}</td>'
-                             f'<td>{fmt_num(r["outside"])}</td><td>{fmt_num(r["inside"])}</td>'
-                             f'<td>{fmt_num(r["contract"])}</td><td>{fmt_num(r["fee"])}</td>'
-                             f'<td>{fmt_num(r["baekbaek"])}</td></tr>')
-
-            rows_html += (f'<tr class="rpt-sum"><td>합계</td>'
-                         f'<td>{fmt_num(totals["call"])}</td><td>{fmt_num(totals["consult"])}</td>'
-                         f'<td>{fmt_num(totals["outside"])}</td><td>{fmt_num(totals["inside"])}</td>'
-                         f'<td>{fmt_num(totals["contract"])}</td><td>{fmt_num(totals["fee"])}</td>'
-                         f'<td>{fmt_num(totals["baekbaek"])}</td></tr>')
-
-            members_html += (
+            uid = f'{mid}-all-{ini}'
+            all_members_html += (
                 f'<div class="rpt-member">'
-                f'<div class="rpt-mhdr" onclick="toggleRpt(\'{mid2}\')">'
+                f'<div class="rpt-mhdr" onclick="toggleRpt(\'{uid}\')">'
                 f'<div style="width:26px;height:26px;border-radius:50%;background:{bg};color:{tx};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;flex-shrink:0">{ini}</div>'
                 f'<span style="font-size:12px;font-weight:500">{esc(mname)}</span>'
                 f'<div style="display:flex;gap:10px;margin-left:auto;margin-right:8px">'
-                f'<span class="rpt-badge">상담 <b>{fmt_num(totals["consult"])}</b></span>'
-                f'<span class="rpt-badge">계약 <b>{fmt_num(totals["contract"])}</b></span>'
-                f'<span class="rpt-badge">수임료 <b>{fmt_num(totals["fee"])}</b></span>'
+                f'<span class="rpt-badge">상담 <b>{fmt_num(full_totals["consult"])}</b></span>'
+                f'<span class="rpt-badge">계약 <b>{fmt_num(full_totals["contract"])}</b></span>'
+                f'<span class="rpt-badge">수임료 <b>{fmt_num(full_totals["fee"])}</b></span>'
+                f'</div><span class="rpt-chv" id="chv-{uid}">▾</span>'
                 f'</div>'
-                f'<span class="rpt-chv" id="chv-{mid2}">▾</span>'
-                f'</div>'
-                f'<div id="rpt-{mid2}" style="display:none;overflow-x:auto">'
-                f'<table class="rpt-table"><thead><tr>'
-                f'<th>날짜</th><th>전화콜량</th><th>상담수</th><th>외근수</th><th>내근수</th><th>계약수</th><th>수임료</th><th>백백수</th>'
-                f'</tr></thead><tbody>{rows_html}</tbody></table>'
-                f'</div></div>'
+                f'<div id="rpt-{uid}" style="display:none;overflow-x:auto">'
+                f'<table class="rpt-table"><thead><tr><th>날짜</th>' + ''.join(f'<th>{c}</th>' for c in COL_LABELS) + f'</tr></thead><tbody>{rows_html}</tbody></table></div></div>'
             )
 
-        # 팀 합계
-        team_sum_html = (
-            f'<div class="rpt-team-sum">'
-            f'<div style="font-size:11px;font-weight:500;color:#676879;margin-bottom:8px">{team["name"]} 합계 — {label}</div>'
-            f'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">'
-            + ''.join(f'<div style="text-align:center"><div style="font-size:9px;color:#aaa;margin-bottom:2px">{n}</div><div style="font-size:13px;font-weight:500;color:{team["color"]}">{fmt_num(team_totals[k])}</div></div>'
-                      for n, k in [('전화콜량','call'),('상담수','consult'),('외근수','outside'),('내근수','inside'),('계약수','contract'),('수임료','fee'),('백백수','baekbaek')])
-            + f'</div></div>'
+        # ── 주차별 탭 ────────────────────────────
+        week_tabs_content = ''
+        week_tab_btns = f'<span class="rpt-wtab rpt-wtab-active" onclick="switchRptWeek(this,\'{mid}\',\'all\')">전체</span>'
+        for wi, wdays in week_ranges:
+            wid = f'w{wi}'
+            w_members_html = ''
+            w_team_totals = {k: 0 for k in KEY_COLS}
+            for mname in members:
+                week_rows = {d: person_month_data[mname][d] for d in wdays if d in person_month_data[mname]}
+                if not week_rows: continue
+                uid = f'{mid}-{wid}-{re.sub(chr(32),"",mname)[:2]}'
+                block, totals = make_member_block(mname, week_rows, uid, f'{wi}주차 합계')
+                w_members_html += block
+                for k in KEY_COLS: w_team_totals[k] += totals[k]
+            if w_members_html:
+                wdays_label = f'{wdays[0][5:].lstrip("0").replace("-","/")}~{wdays[-1][5:].lstrip("0").replace("-","/")}'
+                week_tab_btns += f'<span class="rpt-wtab" onclick="switchRptWeek(this,\'{mid}\',\'{wid}\')">{wi}주차</span>'
+                week_tabs_content += f'<div id="rpt-wc-{mid}-{wid}" style="display:none">{w_members_html}{make_team_sum(w_team_totals, f"{wi}주차")}</div>'
+
+        content_html = (
+            f'<div style="padding:6px 14px 4px;display:flex;gap:6px;flex-wrap:wrap;border-bottom:0.5px solid #e6e9ef">{week_tab_btns}</div>'
+            f'<div style="padding:12px 14px">'
+            f'<div id="rpt-wc-{mid}-all">{all_members_html}{make_team_sum(all_team_totals, label)}</div>'
+            f'{week_tabs_content}'
+            f'</div>'
         )
 
         display = '' if is_cur else 'display:none;'
-        months_html += f'<div id="rpt-month-{mid}" style="{display}">{members_html}{team_sum_html}</div>'
+        months_html += f'<div id="rpt-month-{mid}" style="{display}">{content_html}</div>'
 
     # 월 탭 버튼
     tab_btns = ''
@@ -238,8 +301,6 @@ def render_report_section(team_key, report_data, archive_months):
         active = 'rpt-mtab-active' if am['is_current'] else ''
         tab_btns += f'<span class="rpt-mtab {active}" onclick="switchRptMonth(\'{mid}\')">{label}</span>'
 
-    cur_mid = f'{archive_months[0]["year"]}-{archive_months[0]["month"]:02d}'
-
     return (
         f'<div class="rpt-section">'
         f'<div class="rpt-shdr" onclick="toggleRptSection()">'
@@ -249,7 +310,7 @@ def render_report_section(team_key, report_data, archive_months):
         f'</div>'
         f'<div id="rpt-body">'
         f'<div style="padding:8px 14px 4px;display:flex;gap:6px;flex-wrap:wrap;border-bottom:0.5px solid #e6e9ef">{tab_btns}</div>'
-        f'<div style="padding:12px 14px">{months_html}</div>'
+        f'{months_html}'
         f'</div>'
         f'</div>'
     )
@@ -741,6 +802,17 @@ function switchRptMonth(mid){{
   var parts=mid.split('-');
   document.getElementById('rpt-month-label').textContent='— '+parts[0]+'년 '+parseInt(parts[1])+'월';
 }}
+function switchRptWeek(el,mid,wid){{
+  var prefix='rpt-wc-'+mid+'-';
+  document.querySelectorAll('[id^="'+prefix+'"]').forEach(function(e){{e.style.display='none';}});
+  var target=document.getElementById(prefix+wid);
+  if(target)target.style.display='';
+  var monthEl=document.getElementById('rpt-month-'+mid);
+  if(monthEl){{
+    monthEl.querySelectorAll('.rpt-wtab').forEach(function(t){{t.classList.remove('rpt-wtab-active');}});
+  }}
+  el.classList.add('rpt-wtab-active');
+}}
 function toggleRpt(mid){{
   var body=document.getElementById('rpt-'+mid);
   var chv=document.getElementById('chv-'+mid);
@@ -844,7 +916,10 @@ window.addEventListener('load',initAudios);
             f'.rpt-table td:first-child{{text-align:left;color:#676879;white-space:nowrap}}'
             f'.rpt-table tr:last-child td{{border-bottom:none}}'
             f'.rpt-sum td{{background:#e8f0fe;color:#1565c0;font-weight:500}}'
+            f'.rpt-wsum td{{background:#f0f4ff;color:#3730a3;font-weight:500;font-size:10px}}'
             f'.rpt-team-sum{{background:#fafbfc;border-radius:8px;padding:10px 12px;margin-top:8px;border:0.5px solid #e6e9ef}}'
+            f'.rpt-wtab{{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;border:0.5px solid #e6e9ef;background:#fff;color:#676879;cursor:pointer;margin:0 2px}}'
+            f'.rpt-wtab-active{{background:#0073ea;color:#fff;border-color:#0073ea}}'
             f'</style>'
             f'</head><body><div class="wrap">'
             f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">'
