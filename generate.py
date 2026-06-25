@@ -48,7 +48,7 @@ REPORT_COLS = {
 }
 
 def fetch_report_board():
-    """영업팀 일간 보고서 보드 전체 데이터 fetch (페이지네이션)"""
+    """영업팀 일간 보고서 보드 전체 데이터 fetch"""
     query = '''
     query($boardId: ID!, $cursor: String) {
       boards(ids: [$boardId]) {
@@ -64,17 +64,23 @@ def fetch_report_board():
     }'''
     all_items = []
     cursor = None
-    while True:
+    max_pages = 10  # 최대 10페이지 (5000건)
+    for _ in range(max_pages):
+        variables = {'boardId': str(REPORT_BOARD_ID)}
+        if cursor:
+            variables['cursor'] = cursor
         r = requests.post(
             'https://api.monday.com/v2',
             headers={'Authorization': MONDAY_TOKEN, 'Content-Type': 'application/json'},
-            json={'query': query, 'variables': {'boardId': str(REPORT_BOARD_ID), 'cursor': cursor}}
+            json={'query': query, 'variables': variables},
+            timeout=30
         )
         data = r.json()
         page = data['data']['boards'][0]['items_page']
-        all_items.extend(page['items'])
+        items = page.get('items', [])
+        all_items.extend(items)
         cursor = page.get('cursor')
-        if not cursor:
+        if not cursor or not items:
             break
     return all_items
 
