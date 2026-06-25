@@ -148,10 +148,11 @@ def render_report_section(team_key, report_data, archive_months):
 
             # 날짜별 행
             rows_html = ''
+            wd_names = ['월','화','수','목','금','토','일']
             for d in sorted(month_rows.keys()):
                 r = month_rows[d]
                 dt = datetime.date.fromisoformat(d)
-                dlabel = f'{dt.month}월 {dt.day}일'
+                dlabel = f'{dt.month}월 {dt.day}일 ({wd_names[dt.weekday()]})'
                 rows_html += (f'<tr><td>{dlabel}</td>'
                              f'<td>{fmt_num(r["call"])}</td><td>{fmt_num(r["consult"])}</td>'
                              f'<td>{fmt_num(r["outside"])}</td><td>{fmt_num(r["inside"])}</td>'
@@ -578,9 +579,10 @@ def make_html(team_key, persons, today, year, month, archive_months, report_data
         report_section_html = render_report_section(team_key, report_data, archive_months)
 
     nav_html = f'''
+{report_section_html}
 <div class="nav-section" id="month-section">
   <div class="nav-section-hdr" onclick="toggleNavSection()">
-    <span style="font-size:12px;font-weight:700;color:#323338">&#128197; 월 선택</span>
+    <span style="font-size:12px;font-weight:700;color:#323338">&#128197; 일간 업무 보고</span>
     <div style="display:flex;gap:6px;flex-wrap:wrap">{month_tabs_html}</div>
     <span style="margin-left:auto;font-size:10px;color:#aaa">&#128193; 이전 달은 아카이브</span>
     <span id="nav-chv" style="font-size:12px;color:#aaa;margin-left:6px">▲</span>
@@ -590,7 +592,6 @@ def make_html(team_key, persons, today, year, month, archive_months, report_data
     <div id="week-nav">{weeks_html}</div>
   </div>
 </div>
-{report_section_html}
 <div id="cards-wrap">{cards}</div>
 '''
 
