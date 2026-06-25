@@ -18,6 +18,7 @@ FB_PHOTOS=["file_mm2efy2b","file_mm2ekbcf","file_mm2en8ax","file_mm2egdeg","file
 FB_FILES=["file_mm2ekzfs","file_mm2er3cj","file_mm2e5n7s","file_mm2e7n1k","file_mm2er9xn","file_mm2ed43y",None]
 
 def pf(v): return [s.strip() for s in v.split(',') if s.strip()] if v and isinstance(v,str) else []
+def extract_file_urls(cv_list, col_id):
     """monday.com 파일 컬럼에서 URL 목록 추출"""
     for c in cv_list:
         if c['id'] != col_id: continue
