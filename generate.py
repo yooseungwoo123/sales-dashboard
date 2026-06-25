@@ -17,7 +17,23 @@ FB_DETAIL=["long_text_mm2eqk00","long_text_mm2etqpp","long_text_mm2ezrjp","long_
 FB_PHOTOS=["file_mm2efy2b","file_mm2ekbcf","file_mm2en8ax","file_mm2egdeg","file_mm2egmha","file_mm2eqzmt",None]
 FB_FILES=["file_mm2ekzfs","file_mm2er3cj","file_mm2e5n7s","file_mm2e7n1k","file_mm2er9xn","file_mm2ed43y",None]
 
-def pf(v): return [s.strip() for s in v.split(',') if s.strip()] if v and isinstance(v,str) else []
+def pf(v):
+    if not v: return []
+    if not isinstance(v, str): return []
+    # JSON value 형태인 경우 (monday.com file column)
+    if v.strip().startswith('{') or v.strip().startswith('['):
+        try:
+            import json as _json
+            data = _json.loads(v)
+            urls = []
+            files = data.get('files', []) if isinstance(data, dict) else []
+            for f in files:
+                url = f.get('url', '') or f.get('assetUrl', '')
+                if url: urls.append(url)
+            if urls: return urls
+        except: pass
+    # 쉼표로 구분된 URL 목록
+    return [s.strip() for s in v.split(',') if s.strip()]
 def gs(v):
     if not v: return ''
     if isinstance(v,str): return v
