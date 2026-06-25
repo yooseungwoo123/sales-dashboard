@@ -34,6 +34,187 @@ def ep(t):
     if not t or not isinstance(t,str): return None
     m=re.search(r'\[([^\]]+)\]',t); return m.group(1) if m else None
 
+REPORT_BOARD_ID = 2048953048
+REPORT_COLS = {
+    'name': 'short_textm1ml24et',
+    'date': 'dateq6xjh4ly',
+    'call': 'numberd9oxgtmo',
+    'consult': 'numeric_mktap55t',
+    'outside': 'numberw0x7lot0',
+    'inside': 'numberagnjh5pw',
+    'contract': 'numberj3khnt30',
+    'fee': 'numbersjugrtqf',
+    'baekbaek': 'numberyyenwhu3',
+}
+
+def fetch_report_board():
+    """영업팀 일간 보고서 보드 전체 데이터 fetch (페이지네이션)"""
+    query = '''
+    query($boardId: ID!, $cursor: String) {
+      boards(ids: [$boardId]) {
+        items_page(limit: 500, cursor: $cursor) {
+          cursor
+          items {
+            column_values {
+              id text
+            }
+          }
+        }
+      }
+    }'''
+    all_items = []
+    cursor = None
+    while True:
+        r = requests.post(
+            'https://api.monday.com/v2',
+            headers={'Authorization': MONDAY_TOKEN, 'Content-Type': 'application/json'},
+            json={'query': query, 'variables': {'boardId': str(REPORT_BOARD_ID), 'cursor': cursor}}
+        )
+        data = r.json()
+        page = data['data']['boards'][0]['items_page']
+        all_items.extend(page['items'])
+        cursor = page.get('cursor')
+        if not cursor:
+            break
+    return all_items
+
+def parse_report_items(items):
+    """보고서 보드 아이템을 {이름: {날짜: {컬럼: 값}}} 구조로 파싱"""
+    data = {}
+    for item in items:
+        cv = {c['id']: c['text'] or '' for c in item.get('column_values', [])}
+        name = cv.get(REPORT_COLS['name'], '').strip()
+        date = cv.get(REPORT_COLS['date'], '').strip()
+        if not name or not date: continue
+        if name not in data: data[name] = {}
+        data[name][date] = {
+            'call': float(cv.get(REPORT_COLS['call'], '') or 0),
+            'consult': float(cv.get(REPORT_COLS['consult'], '') or 0),
+            'outside': float(cv.get(REPORT_COLS['outside'], '') or 0),
+            'inside': float(cv.get(REPORT_COLS['inside'], '') or 0),
+            'contract': float(cv.get(REPORT_COLS['contract'], '') or 0),
+            'fee': float(cv.get(REPORT_COLS['fee'], '') or 0),
+            'baekbaek': float(cv.get(REPORT_COLS['baekbaek'], '') or 0),
+        }
+    return data
+
+def fmt_num(v):
+    """소수점 불필요하면 정수로"""
+    return int(v) if v == int(v) else round(v, 1)
+
+def render_report_section(team_key, report_data, archive_months):
+    """영업팀 일간 보고서 섹션 HTML 생성 (월별 탭 연동)"""
+    team = TEAMS[team_key]
+    members = team['members']
+    COLORS = {
+        '유승우': ('#dbeafe', '#1e40af'), '황소정': ('#dcfce7', '#166534'),
+        '이현우': ('#d1fae5', '#065f46'), '박승제': ('#fee2e2', '#991b1b'),
+        '정민규': ('#fef3c7', '#92400e'), '최태웅': ('#fce7f3', '#9d174d'),
+        '심승근': ('#ede9fe', '#5b21b6'),
+    }
+
+    months_html = ''
+    for am in archive_months:
+        y, m = am['year'], am['month']
+        mid = f'{y}-{m:02d}'
+        label = f'{y}년 {m}월'
+        is_cur = am['is_current']
+
+        # 해당 월 팀원별 데이터 수집
+        members_html = ''
+        team_totals = {'call':0,'consult':0,'outside':0,'inside':0,'contract':0,'fee':0,'baekbaek':0}
+
+        for mname in members:
+            # report_data에서 이름 매칭 (부분 일치)
+            matched_key = next((k for k in report_data if mname in k), None)
+            person_data = report_data.get(matched_key, {}) if matched_key else {}
+
+            # 해당 월 날짜만 필터
+            month_rows = {d: v for d, v in person_data.items() if d.startswith(f'{y}-{m:02d}')}
+
+            # 합계
+            totals = {k: sum(r[k] for r in month_rows.values()) for k in ['call','consult','outside','inside','contract','fee','baekbaek']}
+            for k in team_totals: team_totals[k] += totals[k]
+
+            bg, tx = COLORS.get(mname, ('#f1f5f9', '#334155'))
+            ini = re.sub(r'\s*(팀장|부팀장|사원|PM)\s*', '', mname)[:2]
+            mid2 = f'{mid}-{ini}'
+
+            # 날짜별 행
+            rows_html = ''
+            for d in sorted(month_rows.keys()):
+                r = month_rows[d]
+                dt = datetime.date.fromisoformat(d)
+                dlabel = f'{dt.month}월 {dt.day}일'
+                rows_html += (f'<tr><td>{dlabel}</td>'
+                             f'<td>{fmt_num(r["call"])}</td><td>{fmt_num(r["consult"])}</td>'
+                             f'<td>{fmt_num(r["outside"])}</td><td>{fmt_num(r["inside"])}</td>'
+                             f'<td>{fmt_num(r["contract"])}</td><td>{fmt_num(r["fee"])}</td>'
+                             f'<td>{fmt_num(r["baekbaek"])}</td></tr>')
+
+            rows_html += (f'<tr class="rpt-sum"><td>합계</td>'
+                         f'<td>{fmt_num(totals["call"])}</td><td>{fmt_num(totals["consult"])}</td>'
+                         f'<td>{fmt_num(totals["outside"])}</td><td>{fmt_num(totals["inside"])}</td>'
+                         f'<td>{fmt_num(totals["contract"])}</td><td>{fmt_num(totals["fee"])}</td>'
+                         f'<td>{fmt_num(totals["baekbaek"])}</td></tr>')
+
+            members_html += (
+                f'<div class="rpt-member">'
+                f'<div class="rpt-mhdr" onclick="toggleRpt(\'{mid2}\')">'
+                f'<div style="width:26px;height:26px;border-radius:50%;background:{bg};color:{tx};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;flex-shrink:0">{ini}</div>'
+                f'<span style="font-size:12px;font-weight:500">{esc(mname)}</span>'
+                f'<div style="display:flex;gap:10px;margin-left:auto;margin-right:8px">'
+                f'<span class="rpt-badge">상담 <b>{fmt_num(totals["consult"])}</b></span>'
+                f'<span class="rpt-badge">계약 <b>{fmt_num(totals["contract"])}</b></span>'
+                f'<span class="rpt-badge">수임료 <b>{fmt_num(totals["fee"])}</b></span>'
+                f'</div>'
+                f'<span class="rpt-chv" id="chv-{mid2}">▾</span>'
+                f'</div>'
+                f'<div id="rpt-{mid2}" style="display:none;overflow-x:auto">'
+                f'<table class="rpt-table"><thead><tr>'
+                f'<th>날짜</th><th>전화콜량</th><th>상담수</th><th>외근수</th><th>내근수</th><th>계약수</th><th>수임료</th><th>백백수</th>'
+                f'</tr></thead><tbody>{rows_html}</tbody></table>'
+                f'</div></div>'
+            )
+
+        # 팀 합계
+        team_sum_html = (
+            f'<div class="rpt-team-sum">'
+            f'<div style="font-size:11px;font-weight:500;color:#676879;margin-bottom:8px">{team["name"]} 합계 — {label}</div>'
+            f'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">'
+            + ''.join(f'<div style="text-align:center"><div style="font-size:9px;color:#aaa;margin-bottom:2px">{n}</div><div style="font-size:13px;font-weight:500;color:{team["color"]}">{fmt_num(team_totals[k])}</div></div>'
+                      for n, k in [('전화콜량','call'),('상담수','consult'),('외근수','outside'),('내근수','inside'),('계약수','contract'),('수임료','fee'),('백백수','baekbaek')])
+            + f'</div></div>'
+        )
+
+        display = '' if is_cur else 'display:none;'
+        months_html += f'<div id="rpt-month-{mid}" style="{display}">{members_html}{team_sum_html}</div>'
+
+    # 월 탭 버튼
+    tab_btns = ''
+    for am in archive_months:
+        y, m = am['year'], am['month']
+        mid = f'{y}-{m:02d}'
+        label = f'{y}년 {m}월'
+        active = 'rpt-mtab-active' if am['is_current'] else ''
+        tab_btns += f'<span class="rpt-mtab {active}" onclick="switchRptMonth(\'{mid}\')">{label}</span>'
+
+    cur_mid = f'{archive_months[0]["year"]}-{archive_months[0]["month"]:02d}'
+
+    return (
+        f'<div class="rpt-section">'
+        f'<div class="rpt-shdr" onclick="toggleRptSection()">'
+        f'<span style="font-size:12px;font-weight:500">영업팀 일간 보고서</span>'
+        f'<span id="rpt-month-label" style="font-size:10px;color:#aaa;margin-left:4px">— {archive_months[0]["year"]}년 {archive_months[0]["month"]}월</span>'
+        f'<span id="rpt-chv-main" style="margin-left:auto;font-size:12px;color:#aaa">▲</span>'
+        f'</div>'
+        f'<div id="rpt-body">'
+        f'<div style="padding:8px 14px 4px;display:flex;gap:6px;flex-wrap:wrap;border-bottom:0.5px solid #e6e9ef">{tab_btns}</div>'
+        f'<div style="padding:12px 14px">{months_html}</div>'
+        f'</div>'
+        f'</div>'
+    )
+
 def fetch_board():
     query = '''
     query($boardId: ID!) {
@@ -366,7 +547,7 @@ def build_nav_js(year, month, today_str, archive_months):
     return month_tabs_html, weeks_html
 
 
-def make_html(team_key, persons, today, year, month, archive_months):
+def make_html(team_key, persons, today, year, month, archive_months, report_data=None):
     team = TEAMS[team_key]
     now = datetime.datetime.now().strftime('%Y.%m.%d %H:%M')
     cards = ''.join(render_card(p, today) for p in persons)
@@ -383,45 +564,71 @@ def make_html(team_key, persons, today, year, month, archive_months):
         if d.get('confirm','') == '컨펌 완료': total_confirm += 1
 
     month_tabs_html, weeks_html = build_nav_js(year, month, today, archive_months)
-    # 아카이브 링크의 {team} 플레이스홀더를 실제 팀 키로 교체
     month_tabs_html = month_tabs_html.replace('{team}', team_key)
 
+    # 보고서 섹션
+    report_section_html = ''
+    if report_data is not None:
+        report_section_html = render_report_section(team_key, report_data, archive_months)
+
     nav_html = f'''
-<div style="background:#fff;border:0.5px solid #e6e9ef;border-radius:12px;overflow:hidden;margin-bottom:14px">
-  <div style="padding:10px 14px;border-bottom:0.5px solid #e6e9ef;background:#fafbfc;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+<div class="nav-section" id="month-section">
+  <div class="nav-section-hdr" onclick="toggleNavSection()">
     <span style="font-size:12px;font-weight:700;color:#323338">&#128197; 월 선택</span>
     <div style="display:flex;gap:6px;flex-wrap:wrap">{month_tabs_html}</div>
     <span style="margin-left:auto;font-size:10px;color:#aaa">&#128193; 이전 달은 아카이브</span>
+    <span id="nav-chv" style="font-size:12px;color:#aaa;margin-left:6px">▲</span>
   </div>
-  <div style="padding:10px 14px">
+  <div id="nav-body" style="padding:10px 14px">
     <div style="font-size:11px;color:#676879;margin-bottom:8px">주차 선택 후 날짜를 클릭하세요</div>
     <div id="week-nav">{weeks_html}</div>
   </div>
 </div>
+{report_section_html}
 <div id="cards-wrap">{cards}</div>
 '''
 
     nav_css = '''
 <style>
-.mtab{display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;border:0.5px solid #e6e9ef;background:#fff;color:#676879;text-decoration:none;cursor:pointer}
-.mtab-active{background:#0073ea;color:#fff;border-color:#0073ea}
-.week-row{display:flex;align-items:stretch;border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden;margin-bottom:6px}
-.week-label{padding:7px 12px;font-size:11px;font-weight:700;color:#676879;background:#fafbfc;border-right:0.5px solid #e6e9ef;min-width:52px;display:flex;align-items:center;cursor:default}
-.day-cells{display:flex;flex:1}
-.dtab{flex:1;padding:7px 4px;text-align:center;font-size:11px;cursor:pointer;border-right:0.5px solid #e6e9ef;color:#323338;background:#fff;transition:background 0.1s}
-.dtab:last-child{border-right:none}
-.dtab:hover{background:#f0f4ff}
-.dtab-active{background:#0073ea;color:#fff;font-weight:700}
-.dtab-today{color:#0073ea;font-weight:700}
-.dtab-today.dtab-active{background:#0073ea;color:#fff}
-.dtab-disabled{flex:1;padding:7px 4px;text-align:center;font-size:11px;color:#ccc;background:#fafbfc;border-right:0.5px solid #e6e9ef}
-.dtab-disabled:last-child{border-right:none}
-.dname{display:block;font-size:10px;opacity:0.7}
+.mtab{{display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;border:0.5px solid #e6e9ef;background:#fff;color:#676879;text-decoration:none;cursor:pointer}}
+.mtab-active{{background:#0073ea;color:#fff;border-color:#0073ea}}
+.nav-section{{background:#fff;border:0.5px solid #e6e9ef;border-radius:12px;overflow:hidden;margin-bottom:14px}}
+.nav-section-hdr{{padding:10px 14px;border-bottom:0.5px solid #e6e9ef;background:#fafbfc;display:flex;align-items:center;gap:8px;flex-wrap:wrap;cursor:pointer;user-select:none}}
+.week-row{{display:flex;align-items:stretch;border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden;margin-bottom:6px}}
+.week-label{{padding:7px 12px;font-size:11px;font-weight:700;color:#676879;background:#fafbfc;border-right:0.5px solid #e6e9ef;min-width:52px;display:flex;align-items:center;cursor:default}}
+.day-cells{{display:flex;flex:1}}
+.dtab{{flex:1;padding:7px 4px;text-align:center;font-size:11px;cursor:pointer;border-right:0.5px solid #e6e9ef;color:#323338;background:#fff;transition:background 0.1s}}
+.dtab:last-child{{border-right:none}}
+.dtab:hover{{background:#f0f4ff}}
+.dtab-active{{background:#0073ea;color:#fff;font-weight:700}}
+.dtab-today{{color:#0073ea;font-weight:700}}
+.dtab-today.dtab-active{{background:#0073ea;color:#fff}}
+.dtab-disabled{{flex:1;padding:7px 4px;text-align:center;font-size:11px;color:#ccc;background:#fafbfc;border-right:0.5px solid #e6e9ef}}
+.dtab-disabled:last-child{{border-right:none}}
+.dname{{display:block;font-size:10px;opacity:0.7}}
+.rpt-section{{background:#fff;border:0.5px solid #e6e9ef;border-radius:12px;overflow:hidden;margin-bottom:14px}}
+.rpt-shdr{{padding:10px 14px;background:#fafbfc;border-bottom:0.5px solid #e6e9ef;display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}}
+.rpt-mtab{{display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;border:0.5px solid #e6e9ef;background:#fff;color:#676879;cursor:pointer}}
+.rpt-mtab-active{{background:#0073ea;color:#fff;border-color:#0073ea}}
+.rpt-member{{border:0.5px solid #e6e9ef;border-radius:8px;overflow:hidden;margin-bottom:8px}}
+.rpt-mhdr{{padding:8px 12px;background:#fafbfc;display:flex;align-items:center;gap:8px;cursor:pointer}}
+.rpt-mhdr:hover{{background:#f0f4ff}}
+.rpt-badge{{font-size:10px;color:#676879;white-space:nowrap}}
+.rpt-badge b{{color:#323338}}
+.rpt-chv{{font-size:11px;color:#aaa;transition:transform 0.2s}}
+.rpt-chv.open{{transform:rotate(180deg)}}
+.rpt-table{{width:100%;border-collapse:collapse;font-size:11px}}
+.rpt-table th{{padding:6px 8px;background:#fafbfc;color:#676879;font-weight:400;text-align:center;border-bottom:0.5px solid #e6e9ef;border-right:0.5px solid #e6e9ef;white-space:nowrap}}
+.rpt-table th:last-child{{border-right:none}}
+.rpt-table td{{padding:5px 8px;text-align:center;border-bottom:0.5px solid #e6e9ef;border-right:0.5px solid #e6e9ef;color:#323338}}
+.rpt-table td:last-child{{border-right:none}}
+.rpt-table td:first-child{{text-align:left;color:#676879;white-space:nowrap}}
+.rpt-table tr:last-child td{{border-bottom:none}}
+.rpt-sum td{{background:#e8f0fe;color:#1565c0;font-weight:500}}
+.rpt-team-sum{{background:#fafbfc;border-radius:8px;padding:10px 12px;margin-top:8px;border:0.5px solid #e6e9ef}}
 </style>
 '''
 
-    # 날짜별 카드 데이터를 JS로 생성 (클릭 시 해당 날짜 카드로 교체)
-    # 날짜별로 cards HTML을 미리 생성
     all_dates = []
     cal = calendar.Calendar(0)
     for week in cal.monthdatescalendar(year, month):
@@ -440,6 +647,14 @@ def make_html(team_key, persons, today, year, month, archive_months):
     nav_js = f'''
 <script>
 var cardsData = {cards_json};
+var navOpen = true;
+function toggleNavSection(){{
+  navOpen=!navOpen;
+  var body=document.getElementById('nav-body');
+  var chv=document.getElementById('nav-chv');
+  body.style.display=navOpen?'':'none';
+  chv.textContent=navOpen?'▲':'▼';
+}}
 function selectDay(el, dateStr) {{
   document.querySelectorAll('.dtab').forEach(function(t) {{
     t.classList.remove('dtab-active');
@@ -452,6 +667,29 @@ function selectDay(el, dateStr) {{
   }} else {{
     wrap.innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:13px">해당 날짜 데이터가 없습니다</div>';
   }}
+}}
+var rptOpen=true;
+function toggleRptSection(){{
+  rptOpen=!rptOpen;
+  var body=document.getElementById('rpt-body');
+  var chv=document.getElementById('rpt-chv-main');
+  body.style.display=rptOpen?'':'none';
+  chv.textContent=rptOpen?'▲':'▼';
+}}
+function switchRptMonth(mid){{
+  document.querySelectorAll('.rpt-mtab').forEach(function(t){{t.classList.remove('rpt-mtab-active');}});
+  document.querySelectorAll('[id^="rpt-month-"]').forEach(function(el){{el.style.display='none';}});
+  var el=document.getElementById('rpt-month-'+mid);
+  if(el)el.style.display='';
+  event.target.classList.add('rpt-mtab-active');
+  var parts=mid.split('-');
+  document.getElementById('rpt-month-label').textContent='— '+parts[0]+'년 '+parseInt(parts[1])+'월';
+}}
+function toggleRpt(mid){{
+  var body=document.getElementById('rpt-'+mid);
+  var chv=document.getElementById('chv-'+mid);
+  if(body.style.display==='none'){{body.style.display='';if(chv)chv.classList.add('open');}}
+  else{{body.style.display='none';if(chv)chv.classList.remove('open');}}
 }}
 function apToggle(aid){{
   var a=document.getElementById(aid);
@@ -647,6 +885,16 @@ month = today_dt.month
 
 print(f"오늘 날짜: {today}, 팀원 수: {len(all_persons)}")
 
+# 보고서 보드 데이터 fetch
+print("영업팀 일간 보고서 보드 불러오는 중...")
+try:
+    report_items = fetch_report_board()
+    report_data = parse_report_items(report_items)
+    print(f"보고서 데이터: {len(report_data)}명")
+except Exception as e:
+    print(f"보고서 보드 fetch 실패: {e}")
+    report_data = {}
+
 # 최근 3개월 탭 정보
 archive_months = get_month_tabs(year, month)
 
@@ -654,7 +902,7 @@ files = {'team1':'team1.html','team2':'team2.html','cheongju':'cheongju.html'}
 for team_key, filename in files.items():
     members = TEAMS[team_key]['members']
     team_persons = [p for p in all_persons if any(m in p['name'] for m in members)]
-    html = make_html(team_key, team_persons, today, year, month, archive_months)
+    html = make_html(team_key, team_persons, today, year, month, archive_months, report_data)
     with open(filename, 'w', encoding='utf-8') as f:
         f.write(html)
     print(f"{TEAMS[team_key]['name']}: {len(team_persons)}명 → {filename} 생성완료")
