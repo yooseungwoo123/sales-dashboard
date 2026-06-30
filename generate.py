@@ -878,6 +878,9 @@ window.addEventListener('load',initAudios);
 
     return (f'<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">'
             f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+            f'<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">'
+            f'<meta http-equiv="Pragma" content="no-cache">'
+            f'<meta http-equiv="Expires" content="0">'
             f'<title>{team["name"]} 일간 보고</title>'
             f'<style>*{{box-sizing:border-box;margin:0;padding:0}}body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;background:#f5f6f8;color:#323338;font-size:13px}}.wrap{{max-width:900px;margin:0 auto;padding:12px 14px}}'
             f'.mtab{{display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;border:0.5px solid #e6e9ef;background:#fff;color:#676879;text-decoration:none;cursor:pointer}}'
@@ -922,6 +925,7 @@ window.addEventListener('load',initAudios);
             f'.rpt-wtab-active{{background:#0073ea;color:#fff;border-color:#0073ea}}'
             f'</style>'
             f'</head><body><div class="wrap">'
+            f'<script>(function(){{var u=new URL(location.href);if(!u.searchParams.has("_t")){{u.searchParams.set("_t",Date.now());location.replace(u.toString());}}}})();</script>'
             f'<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">'
             f'<div style="font-size:14px;font-weight:700;color:#323338;display:flex;align-items:center;gap:6px">'
             f'<div style="width:8px;height:8px;border-radius:50%;background:{team["color"]}"></div>'
@@ -996,6 +1000,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans
 
     return (f'<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">'
             f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
+            f'<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">'
+            f'<meta http-equiv="Pragma" content="no-cache">'
+            f'<meta http-equiv="Expires" content="0">'
             f'<title>{team["name"]} {year}년 {month}월 아카이브</title>'
             f'{nav_css}'
             f'</head><body><div class="wrap">'
